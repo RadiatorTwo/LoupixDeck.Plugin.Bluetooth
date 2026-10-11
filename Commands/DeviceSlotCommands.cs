@@ -1,5 +1,4 @@
 using System.Globalization;
-using LoupixDeck.Plugin.Bluetooth.Rendering;
 using LoupixDeck.Plugin.Bluetooth.State;
 using LoupixDeck.PluginSdk;
 
@@ -15,7 +14,7 @@ internal sealed class DeviceSlotCommand(
     CommandDescriptor descriptor,
     int slotIndex,
     BluetoothStateStore store,
-    BluetoothSettings settings) : BluetoothCommandBase(descriptor, store), IDisplayImageCommand
+    BluetoothSettings settings) : BluetoothCommandBase(descriptor, store), IDisplayCommand
 {
     /// <summary>State changes are pushed; the poll only covers the short window before the first read.</summary>
     public TimeSpan UpdateInterval => TimeSpan.FromSeconds(2);
@@ -23,18 +22,24 @@ internal sealed class DeviceSlotCommand(
     /// <summary>The favorite this slot shows, or null while the slot is empty.</summary>
     public string? DeviceId => settings.FavoriteAt(slotIndex);
 
-    public bool RenderImage(CommandContext ctx, IRenderCanvas canvas)
+    public string GetText(CommandContext ctx)
     {
-        if (DeviceId is { } deviceId)
+        string? deviceId = DeviceId;
+
+        if (deviceId is null)
         {
-            DeviceDisplay.Draw(canvas, Store, deviceId, ctx.Host);
-        }
-        else
-        {
-            TileRenderer.Draw(canvas, TileRenderer.UnavailableColor, "bluetooth", TileRenderer.DimTextColor, ctx.Host.Tr("Empty slot"), null, null);
+            return ctx.Host.Tr("Empty slot");
         }
 
-        return true;
+        BluetoothSnapshot snapshot = Store.Current;
+        DeviceConnectionState state = Store.StateOf(deviceId, snapshot);
+
+        if (snapshot.FindDevice(deviceId) is not { } device)
+        {
+            return string.Join(Environment.NewLine, ctx.Host.Tr("Device not found"), ctx.Host.Tr(DeviceConnectionStates.ToEnglishText(state)));
+        }
+
+        return string.Join(Environment.NewLine, device.DisplayName, DeviceDisplay.StateText(Store, state, device, ctx.Host));
     }
 
     protected override async Task ExecuteCore(CommandContext ctx)
@@ -61,23 +66,23 @@ internal static class DeviceSlotCommands
     /// </summary>
     public static readonly IReadOnlyList<ButtonStateDescriptor> States =
     [
-        State(DeviceConnectionState.Disconnected, "The device is not connected"),
-        State(DeviceConnectionState.Connecting, "The device is connecting"),
-        State(DeviceConnectionState.Connected, "The device is connected"),
-        State(DeviceConnectionState.Disconnecting, "The device is disconnecting"),
-        State(DeviceConnectionState.Failed, "The last connection attempt failed"),
-        State(DeviceConnectionState.Unavailable, "BlueZ, the adapter or the device is not available")
+        State(DeviceConnectionState.Disconnected, "The device is not connected", BluetoothButtonLayouts.Group, BluetoothButtonLayouts.OffColor),
+        State(DeviceConnectionState.Connecting, "The device is connecting", BluetoothButtonLayouts.Connecting, BluetoothButtonLayouts.BusyColor),
+        State(DeviceConnectionState.Connected, "The device is connected", BluetoothButtonLayouts.Connect, BluetoothButtonLayouts.ConnectedColor),
+        State(DeviceConnectionState.Disconnecting, "The device is disconnecting", BluetoothButtonLayouts.Connecting, BluetoothButtonLayouts.BusyColor),
+        State(DeviceConnectionState.Failed, "The last connection attempt failed", BluetoothButtonLayouts.Failed, BluetoothButtonLayouts.FailedColor),
+        State(DeviceConnectionState.Unavailable, "BlueZ, the adapter or the device is not available", BluetoothButtonLayouts.Off, BluetoothButtonLayouts.UnavailableColor)
     ];
 
     /// <summary>
-    /// A state without layers of its own: the slot draws the whole key, in the state's colour. The
-    /// states stay so the user can still give each one a design of their own.
+    /// A state with its own icon. The caption is left to the host and then replaced by the slot's
+    /// live text, which names the device and its state.
     /// </summary>
-    private static ButtonStateDescriptor State(DeviceConnectionState state, string description) => new()
+    private static ButtonStateDescriptor State(DeviceConnectionState state, string description, string glyph, string color) => new()
     {
         Name = DeviceConnectionStates.ToButtonState(state),
         Description = description,
-        Layout = BluetoothButtonLayouts.None
+        Layout = BluetoothButtonLayouts.IconWithCaption(glyph, caption: null, tall: true, color)
     };
 
     public static IReadOnlyList<DeviceSlotCommand> Create(BluetoothStateStore store, BluetoothSettings settings)
@@ -94,7 +99,7 @@ internal static class DeviceSlotCommands
                 DisplayName = "Device Slot " + number,
                 Group = BluetoothCommands.Group,
                 Icon = BluetoothButtonLayouts.Group,
-                // The slot draws the whole key itself.
+                // Every state brings its own icon; the slot's live text replaces the caption.
                 ButtonLayout = BluetoothButtonLayouts.None,
                 Description = "Show and toggle favorite device " + number + ". The button follows the device's state.",
                 HiddenFromMenu = true,

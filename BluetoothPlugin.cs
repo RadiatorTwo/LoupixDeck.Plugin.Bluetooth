@@ -93,7 +93,7 @@ public sealed class BluetoothPlugin : LoupixPlugin, IMenuContributor, IPluginSet
             List<string> displayCommandNames =
             [
                 .. _commands
-                    .Where(command => command is IDisplayCommand or IValueDisplayCommand or IDisplayImageCommand)
+                    .Where(command => command is IDisplayCommand or IValueDisplayCommand)
                     .Select(command => command.Descriptor.CommandName)
             ];
 
