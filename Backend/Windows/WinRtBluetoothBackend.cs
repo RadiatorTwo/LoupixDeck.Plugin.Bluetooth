@@ -472,7 +472,7 @@ internal sealed class WinRtBluetoothBackend : IBluetoothBackend
                 return (Guid.Empty, false);
             }
 
-            return (Read<Guid>(info, ContainerIdProperty) ?? Guid.Empty, Read<Guid>(info, ProtocolIdProperty) == LowEnergyProtocol);
+            return (Read<Guid>(info, ContainerIdProperty) ?? Guid.Empty, IsLowEnergy(info));
         }
     }
 
@@ -558,7 +558,7 @@ internal sealed class WinRtBluetoothBackend : IBluetoothBackend
             return;
         }
 
-        bool lowEnergy = Read<Guid>(info, ProtocolIdProperty) == LowEnergyProtocol;
+        bool lowEnergy = IsLowEnergy(info);
         string id = info.Id;
 
         _ = Task.Run(async () =>
@@ -742,8 +742,9 @@ internal sealed class WinRtBluetoothBackend : IBluetoothBackend
 
     /// <summary>
     /// Builds a snapshot from the watched endpoints. Called under <see cref="_lock"/>. A paired
-    /// endpoint wins over a found one with the same address. A device keeps its old LastSeen when
-    /// nothing about it changed.
+    /// endpoint wins over a found one with the same address, and a classic endpoint over an LE one:
+    /// a dual-mode headset shows up as both (the LE one named "LE_..."), and only the classic one
+    /// carries its audio connection. A device keeps its old LastSeen when nothing about it changed.
     /// </summary>
     private BluetoothSnapshot BuildSnapshot(BluetoothAdapter adapter, BluetoothSnapshot previous)
     {
@@ -759,7 +760,9 @@ internal sealed class WinRtBluetoothBackend : IBluetoothBackend
         DateTimeOffset now = DateTimeOffset.UtcNow;
         Dictionary<string, BluetoothDeviceState> devices = new(StringComparer.OrdinalIgnoreCase);
 
-        foreach (DeviceInformation info in _paired.Values.Concat(_found.Values))
+        IEnumerable<DeviceInformation> endpoints = _paired.Values.OrderBy(IsLowEnergy).Concat(_found.Values.OrderBy(IsLowEnergy));
+
+        foreach (DeviceInformation info in endpoints)
         {
             if (WindowsAddress.Parse(Read(info, AddressProperty)) is not { } raw)
             {
@@ -915,6 +918,8 @@ internal sealed class WinRtBluetoothBackend : IBluetoothBackend
         left.IsAvailable == right.IsAvailable &&
         left.Adapters.SequenceEqual(right.Adapters) &&
         left.Devices.SequenceEqual(right.Devices);
+
+    private static bool IsLowEnergy(DeviceInformation info) => Read<Guid>(info, ProtocolIdProperty) == LowEnergyProtocol;
 
     private static T? Read<T>(DeviceInformation info, string key) where T : struct =>
         info.Properties.TryGetValue(key, out object? value) && value is T typed ? typed : null;
