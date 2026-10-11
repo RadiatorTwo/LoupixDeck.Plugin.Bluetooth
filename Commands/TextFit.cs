@@ -21,8 +21,11 @@ internal static class TextFit
 
     private const string Ellipsis = "…";
 
-    /// <summary>The share of the box text may use; the host wraps a little before the exact edge.</summary>
-    private const double Margin = 0.94;
+    /// <summary>
+    /// The share of the box text may use. The computed widths come out up to about 3 % narrower
+    /// than the host measures them, so they are compared against a slightly smaller box.
+    /// </summary>
+    private const double Margin = 0.97;
 
     /// <summary>
     /// Returns <paramref name="text"/> unchanged when it fits on one line of a box
@@ -45,6 +48,92 @@ internal static class TextFit
         }
 
         return shortened.TrimEnd() + Ellipsis;
+    }
+
+    /// <summary>
+    /// Returns <paramref name="text"/> unchanged when the host wraps it into at most
+    /// <paramref name="maxLines"/> lines, else shortened with an ellipsis until it does.
+    /// </summary>
+    public static string Lines(string text, int textSize, int boxWidth, int maxLines)
+    {
+        double available = boxWidth * Margin;
+
+        // A word wider than a line is split by the host after whichever character reaches the edge.
+        // A break after a hyphen or underscore reads better, so it is set here when it helps.
+        if (!text.Contains(' ') && maxLines >= 2 && Width(text, textSize) > available)
+        {
+            int split = text.LastIndexOfAny(['-', '_'], text.Length - 2);
+
+            while (split > 0 && Width(text[..(split + 1)], textSize) > available)
+            {
+                split = text.LastIndexOfAny(['-', '_'], split - 1);
+            }
+
+            if (split > 0 && Width(text[(split + 1)..], textSize) <= available)
+            {
+                return text[..(split + 1)] + "\n" + text[(split + 1)..];
+            }
+        }
+
+        if (Wrap(text, textSize, available) <= maxLines)
+        {
+            return text;
+        }
+
+        string shortened = text;
+
+        while (shortened.Length > 1 && Wrap(shortened.TrimEnd() + Ellipsis, textSize, available) > maxLines)
+        {
+            shortened = shortened[..^1];
+        }
+
+        return shortened.TrimEnd() + Ellipsis;
+    }
+
+    /// <summary>
+    /// The number of lines the host wraps a text into: word by word, and a word wider than the box
+    /// character by character, as the host's text layer does.
+    /// </summary>
+    private static int Wrap(string text, int textSize, double available)
+    {
+        int lines = 0;
+        string current = string.Empty;
+
+        foreach (string word in text.Split(' '))
+        {
+            string joined = current.Length == 0 ? word : current + " " + word;
+
+            if (Width(joined, textSize) <= available)
+            {
+                current = joined;
+                continue;
+            }
+
+            if (current.Length > 0)
+            {
+                lines++;
+                current = string.Empty;
+            }
+
+            if (Width(word, textSize) <= available)
+            {
+                current = word;
+                continue;
+            }
+
+            foreach (char c in word)
+            {
+                if (Width(current + c, textSize) > available && current.Length > 0)
+                {
+                    lines++;
+                    current = string.Empty;
+                }
+
+                current += c;
+            }
+        }
+
+        return current.Length > 0 ? lines + 1 : lines;
     }
 
     /// <summary>The width of a single line in pixels.</summary>

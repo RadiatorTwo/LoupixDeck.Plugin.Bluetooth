@@ -97,8 +97,9 @@ internal static class BluetoothButtonLayouts
     /// command's value, so the user can restyle each part in the button editor.
     /// </summary>
     // The text sizes of a device key; the value texts are fitted to them before they are handed over.
-    public const int DeviceNameSize = 12;
-    public const int DeviceStateSize = 10;
+    public const int DeviceNameSize = 13;
+    public const int DeviceNameLines = 2;
+    public const int DeviceStateSize = 11;
     public const int DeviceTextBoxWidth = CaptionBoxWidth;
 
     public static ButtonLayoutDescriptor DeviceValue(string glyph) => new()
@@ -110,8 +111,8 @@ internal static class BluetoothButtonLayouts
             {
                 Kind = ButtonLayerKind.Indicator,
                 Name = "Battery",
-                IconScale = 0.54,
-                OffsetY = -18,
+                IconScale = 0.44,
+                OffsetY = -23,
                 Color = ConnectedColor,
                 TrackColor = "#33FFFFFF",
                 Thickness = 0.08,
@@ -123,8 +124,8 @@ internal static class BluetoothButtonLayouts
                 Kind = ButtonLayerKind.Symbol,
                 Name = "Icon",
                 Glyph = glyph,
-                IconScale = 0.26,
-                OffsetY = -18
+                IconScale = 0.21,
+                OffsetY = -23
             },
             new ButtonLayerDescriptor
             {
@@ -132,9 +133,10 @@ internal static class BluetoothButtonLayouts
                 Name = "Device",
                 TextSource = ButtonTextSource.Value,
                 TextSize = DeviceNameSize,
-                OffsetY = 17,
+                OffsetY = 12,
                 BoxWidth = DeviceTextBoxWidth,
-                BoxHeight = 20
+                // Room for two lines; a single line sits centred in it.
+                BoxHeight = 30
             },
             new ButtonLayerDescriptor
             {
