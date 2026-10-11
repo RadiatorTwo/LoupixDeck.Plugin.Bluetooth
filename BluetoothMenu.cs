@@ -130,6 +130,14 @@ internal sealed class BluetoothMenu(BluetoothStateStore store, BluetoothSettings
                 continue;
             }
 
+            if (connect)
+            {
+                bool favorite = settings.Favorites.Any(entry => DeviceIds.Matches(entry, device));
+                leaves.Add(favorite
+                    ? DeviceLeaf($"{name} — {host.Tr("Remove from Favorites")}", BluetoothCommands.RemoveFavorite, id)
+                    : DeviceLeaf($"{name} — {host.Tr("Add to Favorites")}", BluetoothCommands.AddFavorite, id));
+            }
+
             nodes.Add(Folder(Label(device, snapshot, severalAdapters), leaves, translate: false));
         }
 

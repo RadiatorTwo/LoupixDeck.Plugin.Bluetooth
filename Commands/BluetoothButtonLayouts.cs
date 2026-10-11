@@ -23,6 +23,8 @@ internal static class BluetoothButtonLayouts
     public const string Folder = "\U000F0FB0";         // mdi-devices
     public const string Connecting = "\U000F051F";     // mdi-timer-sand
     public const string Failed = "\U000F015A";         // mdi-close-circle-outline
+    public const string AddFavorite = "\U000F1567";    // mdi-star-plus-outline
+    public const string RemoveFavorite = "\U000F1568"; // mdi-star-minus-outline
 
     // State tints: the icon says at a glance which state a key is in.
     public const string OnColor = "#2196F3";

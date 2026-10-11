@@ -27,6 +27,8 @@ internal static class BluetoothCommands
     public const string Trust = Prefix + "Trust";
     public const string Untrust = Prefix + "Untrust";
     public const string OpenDevices = Prefix + "OpenDevices";
+    public const string AddFavorite = Prefix + "AddFavorite";
+    public const string RemoveFavorite = Prefix + "RemoveFavorite";
 
     /// <summary>The prefix of the slot commands, followed by a two-digit number.</summary>
     public const string SlotPrefix = Prefix + "Device";

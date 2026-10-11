@@ -78,6 +78,8 @@ public sealed class BluetoothPlugin : LoupixPlugin, IMenuContributor, IPluginSet
 
             if (capabilities.HasFlag(BluetoothCapabilities.Connect))
             {
+                _commands.AddRange(FavoriteCommand.Create(store, settings));
+
                 foreach (DeviceSlotCommand slot in DeviceSlotCommands.Create(store, settings))
                 {
                     _commands.Add(slot);

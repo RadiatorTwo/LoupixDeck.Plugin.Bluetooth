@@ -100,6 +100,61 @@ internal sealed class DeviceCommand(CommandDescriptor descriptor, DeviceAction a
     }
 }
 
+/// <summary>Adds a device to the favorites behind the slots, or removes it.</summary>
+internal sealed class FavoriteCommand(CommandDescriptor descriptor, bool add, BluetoothStateStore store, BluetoothSettings settings)
+    : BluetoothCommandBase(descriptor, store)
+{
+    protected override Task ExecuteCore(CommandContext ctx)
+    {
+        string? deviceId = BluetoothCommands.ReadParameter(ctx, 0);
+
+        if (deviceId is null)
+        {
+            ShowOverlay(ctx, ctx.Host.Tr("No device selected"));
+            return Task.CompletedTask;
+        }
+
+        // The stable id survives a second adapter; a bare address typed by hand is kept as it is.
+        string id = Store.Current.FindDevice(deviceId)?.StableId ?? deviceId;
+        bool changed = add ? settings.AddFavorite(id) : settings.RemoveFavorite(id);
+
+        ShowOverlay(ctx, ctx.Host.Tr(add
+            ? changed ? "Added to favorites" : "Already a favorite"
+            : changed ? "Removed from favorites" : "Not a favorite"));
+
+        if (changed)
+        {
+            Store.NotifySettingsChanged();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public static IEnumerable<IPluginCommand> Create(BluetoothStateStore store, BluetoothSettings settings)
+    {
+        yield return new FavoriteCommand(
+            Describe(BluetoothCommands.AddFavorite, "Add to Favorites", "Add the device to the favorites shown by the device slots", BluetoothButtonLayouts.AddFavorite),
+            add: true, store, settings);
+
+        yield return new FavoriteCommand(
+            Describe(BluetoothCommands.RemoveFavorite, "Remove from Favorites", "Remove the device from the favorites", BluetoothButtonLayouts.RemoveFavorite),
+            add: false, store, settings);
+    }
+
+    private static CommandDescriptor Describe(string commandName, string displayName, string description, string glyph) => new()
+    {
+        CommandName = commandName,
+        DisplayName = displayName,
+        Group = BluetoothCommands.Group,
+        Icon = glyph,
+        ButtonLayout = BluetoothButtonLayouts.IconWithCaption(glyph, caption: null, tall: true),
+        Description = description,
+        ParameterTemplate = BluetoothCommands.DeviceTemplate,
+        Parameters = [new CommandParameter(BluetoothCommands.DeviceParameter, typeof(string))],
+        HiddenFromMenu = true
+    };
+}
+
 /// <summary>The texts every device key and folder entry shows, built from cached state only.</summary>
 internal static class DeviceDisplay
 {
