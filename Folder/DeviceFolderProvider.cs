@@ -172,9 +172,7 @@ internal sealed class DeviceFolderProvider(BluetoothStateStore store, BluetoothS
         entries.Add(new FolderEntry
         {
             SlotIndex = grid.SlotForIndex(index++),
-            Text = $"{session.DeviceName}{Environment.NewLine}{statusText}",
             BackColor = statusColor,
-            TextSize = 13,
             Render = canvas => DrawTile(canvas, statusColor, "bluetooth-settings", PluginColor.White, session.DeviceName, statusText, null)
         });
 
@@ -183,10 +181,7 @@ internal sealed class DeviceFolderProvider(BluetoothStateStore store, BluetoothS
             entries.Add(new FolderEntry
             {
                 SlotIndex = grid.SlotForIndex(index++),
-                Text = code,
                 BackColor = DiscoveryColor,
-                TextSize = 18,
-                Bold = true,
                 Render = canvas => DrawCode(canvas, code)
             });
         }
@@ -215,10 +210,7 @@ internal sealed class DeviceFolderProvider(BluetoothStateStore store, BluetoothS
         return new FolderEntry
         {
             SlotIndex = slot,
-            Text = text,
             BackColor = color,
-            TextSize = 14,
-            Bold = true,
             Render = canvas => DrawTile(canvas, color, symbol, PluginColor.White, text, null, null),
             OnPress = () =>
             {
@@ -255,18 +247,18 @@ internal sealed class DeviceFolderProvider(BluetoothStateStore store, BluetoothS
     private FolderEntry DiscoveryEntry(int slot, BluetoothAdapterState adapter)
     {
         TimeSpan? remaining = store.DiscoveryRemaining(adapter);
-        string text = remaining is { } left
-            ? $"{host.Tr("Discovering")}{Environment.NewLine}{Math.Ceiling(left.TotalSeconds).ToString(CultureInfo.InvariantCulture)} s"
-            : adapter.Powered ? host.Tr("Discover") : host.Tr("Adapter is off");
+        string title = remaining is null
+            ? adapter.Powered ? host.Tr("Discover") : host.Tr("Adapter is off")
+            : host.Tr("Discovering");
+        string? countdown = remaining is { } left
+            ? Math.Ceiling(left.TotalSeconds).ToString(CultureInfo.InvariantCulture) + " s"
+            : null;
 
         return new FolderEntry
         {
             SlotIndex = slot,
-            Text = text,
             BackColor = remaining is null ? DisconnectedColor : DiscoveryColor,
-            TextSize = 13,
-            Bold = remaining is not null,
-            Render = canvas => DrawTile(canvas, remaining is null ? DisconnectedColor : DiscoveryColor, "radar", PluginColor.White, text, null, null),
+            Render = canvas => DrawTile(canvas, remaining is null ? DisconnectedColor : DiscoveryColor, "radar", PluginColor.White, title, countdown, null),
             OnPress = () => DiscoveryPressAsync(slot)
         };
     }
@@ -284,15 +276,11 @@ internal sealed class DeviceFolderProvider(BluetoothStateStore store, BluetoothS
         }
 
         string? battery = device.BatteryPercent is byte percent ? percent.ToString(CultureInfo.InvariantCulture) + " %" : null;
-        string text = string.Join(Environment.NewLine, new[] { device.DisplayName, stateText, battery }.Where(line => line is not null));
 
         return new FolderEntry
         {
             SlotIndex = slot,
-            Text = text,
             BackColor = back,
-            TextSize = 13,
-            Bold = state == DeviceConnectionState.Connected,
             Render = canvas => DrawTile(
                 canvas,
                 back,
@@ -423,8 +411,12 @@ internal sealed class DeviceFolderProvider(BluetoothStateStore store, BluetoothS
     };
 
     /// <summary>
+    /// Tiles drawn here must not set <see cref="FolderEntry.Text"/>: the host draws the text on top
+    /// of <see cref="FolderEntry.Render"/>, so both would show.
+    /// <para>
     /// An icon over up to three lines: the name, the state and the battery level. Laid out for a
     /// 90 px tile and scaled onto the real one.
+    /// </para>
     /// </summary>
     private static void DrawTile(
         IRenderCanvas canvas,
