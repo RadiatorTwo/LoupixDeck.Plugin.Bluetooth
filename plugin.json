@@ -5,8 +5,8 @@
   "sdkVersion": "1.31",
   "entryAssembly": "LoupixDeck.Plugin.Bluetooth.dll",
   "platform": "All",
-  "author": "",
-  "description": "",
-  "projectUrl": "",
+  "author": "RadiatorTwo",
+  "description": "Connects, disconnects and shows paired Bluetooth devices through BlueZ over D-Bus.",
+  "projectUrl": "https://github.com/RadiatorTwo/LoupixDeck.Plugin.Bluetooth",
   "iconFile": ""
 }
