@@ -97,6 +97,11 @@ internal static class BluetoothButtonLayouts
     /// it and its state with the battery level under that. The ring, name and state come from the
     /// command's value, so the user can restyle each part in the button editor.
     /// </summary>
+    // The text sizes of a device key; the value texts are fitted to them before they are handed over.
+    public const int DeviceNameSize = 12;
+    public const int DeviceStateSize = 10;
+    public const int DeviceTextBoxWidth = CaptionBoxWidth;
+
     public static ButtonLayoutDescriptor DeviceValue(string glyph) => new()
     {
         Mode = ButtonLayoutMode.Custom,
@@ -106,8 +111,8 @@ internal static class BluetoothButtonLayouts
             {
                 Kind = ButtonLayerKind.Indicator,
                 Name = "Battery",
-                IconScale = 0.62,
-                OffsetY = -14,
+                IconScale = 0.54,
+                OffsetY = -18,
                 Color = ConnectedColor,
                 TrackColor = "#33FFFFFF",
                 Thickness = 0.08,
@@ -119,28 +124,28 @@ internal static class BluetoothButtonLayouts
                 Kind = ButtonLayerKind.Symbol,
                 Name = "Icon",
                 Glyph = glyph,
-                IconScale = 0.3,
-                OffsetY = -14
+                IconScale = 0.26,
+                OffsetY = -18
             },
             new ButtonLayerDescriptor
             {
                 Kind = ButtonLayerKind.Text,
                 Name = "Device",
                 TextSource = ButtonTextSource.Value,
-                TextSize = 11,
-                OffsetY = 22,
-                BoxWidth = CaptionBoxWidth,
-                BoxHeight = 16
+                TextSize = DeviceNameSize,
+                OffsetY = 17,
+                BoxWidth = DeviceTextBoxWidth,
+                BoxHeight = 20
             },
             new ButtonLayerDescriptor
             {
                 Kind = ButtonLayerKind.Text,
                 Name = "State",
                 TextSource = ButtonTextSource.Detail,
-                TextSize = 9,
-                OffsetY = 36,
-                BoxWidth = CaptionBoxWidth,
-                BoxHeight = 14
+                TextSize = DeviceStateSize,
+                OffsetY = 34,
+                BoxWidth = DeviceTextBoxWidth,
+                BoxHeight = 16
             }
         ]
     };

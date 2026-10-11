@@ -173,15 +173,28 @@ internal static class DeviceDisplay
         if (device is null)
         {
             string reason = snapshot.IsAvailable ? "Device not found" : "Bluetooth unavailable";
-            return new AdjustmentValue(double.NaN, deviceId) { Detail = host.Tr(reason) };
+            return new AdjustmentValue(double.NaN, TextFit.Line(deviceId, BluetoothButtonLayouts.DeviceNameSize, BluetoothButtonLayouts.DeviceTextBoxWidth))
+            {
+                Detail = TextFit.Line(host.Tr(reason), BluetoothButtonLayouts.DeviceStateSize, BluetoothButtonLayouts.DeviceTextBoxWidth)
+            };
         }
 
         string detail = showTrust
             ? host.Tr(device.Trusted ? "Trusted" : "Not trusted")
             : StateText(store, state, device, host);
 
+        // The host wraps a line that is too wide into the ring above it, so both lines are fitted
+        // to the key's text sizes here. A state with a battery level first drops its separator.
+        if (TextFit.Width(detail, BluetoothButtonLayouts.DeviceStateSize) > BluetoothButtonLayouts.DeviceTextBoxWidth * 0.94)
+        {
+            detail = detail.Replace(" · ", " ", StringComparison.Ordinal).Replace(" %", "%", StringComparison.Ordinal);
+        }
+
         double normalized = device.BatteryPercent is byte battery ? battery / 100.0 : double.NaN;
-        return new AdjustmentValue(normalized, device.DisplayName) { Detail = detail };
+        return new AdjustmentValue(normalized, TextFit.Line(device.DisplayName, BluetoothButtonLayouts.DeviceNameSize, BluetoothButtonLayouts.DeviceTextBoxWidth))
+        {
+            Detail = TextFit.Line(detail, BluetoothButtonLayouts.DeviceStateSize, BluetoothButtonLayouts.DeviceTextBoxWidth)
+        };
     }
 
     /// <summary>"Connected · 82 %", or the failure reason while a failure is remembered.</summary>
