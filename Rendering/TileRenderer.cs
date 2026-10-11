@@ -1,3 +1,5 @@
+using System.Globalization;
+using LoupixDeck.Plugin.Bluetooth.State;
 using LoupixDeck.PluginSdk;
 
 namespace LoupixDeck.Plugin.Bluetooth.Rendering;
@@ -18,6 +20,33 @@ internal static class TileRenderer
     public static readonly PluginColor LowBatteryColor = PluginColor.FromRgb(0xFF, 0x8A, 0x65);
     public static readonly PluginColor ConfirmColor = PluginColor.FromRgb(0x2E, 0x7D, 0x32);
     public static readonly PluginColor CancelColor = PluginColor.FromRgb(0x8E, 0x24, 0x24);
+
+    /// <summary>The background of a paired device's tile.</summary>
+    public static PluginColor StateColor(DeviceConnectionState state) => state switch
+    {
+        DeviceConnectionState.Connected => ConnectedColor,
+        DeviceConnectionState.Connecting or DeviceConnectionState.Disconnecting => BusyColor,
+        DeviceConnectionState.Failed => FailedColor,
+        DeviceConnectionState.Unavailable => UnavailableColor,
+        _ => DisconnectedColor
+    };
+
+    /// <summary>A device: its kind icon, name, <paramref name="stateText"/> and battery level.</summary>
+    public static void DrawDevice(IRenderCanvas canvas, BluetoothDeviceState device, DeviceConnectionState state, string stateText, PluginColor back)
+    {
+        (string, PluginColor)? battery = device.BatteryPercent is byte percent
+            ? (percent.ToString(CultureInfo.InvariantCulture) + " %", percent <= 20 ? LowBatteryColor : PluginColor.White)
+            : null;
+
+        Draw(
+            canvas,
+            back,
+            BluetoothDeviceKinds.SymbolName(device.Kind),
+            state == DeviceConnectionState.Connected ? PluginColor.White : DimTextColor,
+            device.DisplayName,
+            stateText,
+            battery);
+    }
 
     /// <summary>
     /// Tiles drawn here must not set <see cref="FolderEntry.Text"/>: the host draws the text on top

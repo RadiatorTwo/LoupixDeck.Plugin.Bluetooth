@@ -255,7 +255,7 @@ internal sealed class DeviceFolderProvider(BluetoothStateStore store, BluetoothS
     private FolderEntry DeviceEntry(int slot, BluetoothDeviceState device, BluetoothSnapshot snapshot)
     {
         DeviceConnectionState state = store.StateOf(device.StableId, snapshot);
-        PluginColor back = device.Paired ? ColorFor(state) : TileRenderer.UnpairedColor;
+        PluginColor back = device.Paired ? TileRenderer.StateColor(state) : TileRenderer.UnpairedColor;
         string stateText = device.Paired
             ? host.Tr(DeviceConnectionStates.ToEnglishText(state))
             : RssiText(device);
@@ -264,20 +264,11 @@ internal sealed class DeviceFolderProvider(BluetoothStateStore store, BluetoothS
             stateText = host.Tr(reason);
         }
 
-        string? battery = device.BatteryPercent is byte percent ? percent.ToString(CultureInfo.InvariantCulture) + " %" : null;
-
         return new FolderEntry
         {
             SlotIndex = slot,
             BackColor = back,
-            Render = canvas => TileRenderer.Draw(
-                canvas,
-                back,
-                BluetoothDeviceKinds.SymbolName(device.Kind),
-                state == DeviceConnectionState.Connected ? PluginColor.White : TileRenderer.DimTextColor,
-                device.DisplayName,
-                stateText,
-                battery is null ? null : (battery, device.BatteryPercent <= 20 ? TileRenderer.LowBatteryColor : PluginColor.White)),
+            Render = canvas => TileRenderer.DrawDevice(canvas, device, state, stateText, back),
             OnPress = () => DevicePressAsync(slot, device)
         };
     }
@@ -390,14 +381,6 @@ internal sealed class DeviceFolderProvider(BluetoothStateStore store, BluetoothS
             ? $"{host.Tr("Press to pair")} · {rssi.ToString(CultureInfo.InvariantCulture)} dBm"
             : host.Tr("Press to pair");
 
-    private static PluginColor ColorFor(DeviceConnectionState state) => state switch
-    {
-        DeviceConnectionState.Connected => TileRenderer.ConnectedColor,
-        DeviceConnectionState.Connecting or DeviceConnectionState.Disconnecting => TileRenderer.BusyColor,
-        DeviceConnectionState.Failed => TileRenderer.FailedColor,
-        DeviceConnectionState.Unavailable => TileRenderer.UnavailableColor,
-        _ => TileRenderer.DisconnectedColor
-    };
 }
 
 /// <summary>Opens the device folder.</summary>

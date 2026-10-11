@@ -95,7 +95,8 @@ internal static class BluetoothCommands
         DisplayName = displayName,
         Group = Group,
         Icon = glyph,
-        ButtonLayout = BluetoothButtonLayouts.DeviceValue(glyph),
+        // The command draws the whole key itself.
+        ButtonLayout = BluetoothButtonLayouts.None,
         Description = description,
         ParameterTemplate = DeviceTemplate,
         Parameters = [new CommandParameter(DeviceParameter, typeof(string))],

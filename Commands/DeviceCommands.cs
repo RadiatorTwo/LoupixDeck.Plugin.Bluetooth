@@ -1,5 +1,6 @@
 using System.Globalization;
 using LoupixDeck.Plugin.Bluetooth.Backend;
+using LoupixDeck.Plugin.Bluetooth.Rendering;
 using LoupixDeck.Plugin.Bluetooth.State;
 using LoupixDeck.PluginSdk;
 
@@ -16,19 +17,21 @@ internal enum DeviceAction
 }
 
 /// <summary>
-/// Acts on the device in its parameter and shows that device on the key: name, state, battery
-/// level and a battery ring. The value feeds the key's own layers, so the user can restyle them.
+/// Acts on the device in its parameter and shows that device on the key: icon, name, state and
+/// battery level. The plugin draws the key itself, like a folder tile: the host's text layers wrap
+/// a long name into the line below, and only the plugin can measure and fit it.
 /// </summary>
 internal sealed class DeviceCommand(CommandDescriptor descriptor, DeviceAction action, BluetoothStateStore store)
-    : BluetoothCommandBase(descriptor, store), IValueDisplayCommand
+    : BluetoothCommandBase(descriptor, store), IDisplayImageCommand
 {
     /// <summary>State changes are pushed; the poll only covers what has no event, such as an expired failure.</summary>
     public TimeSpan UpdateInterval => TimeSpan.FromSeconds(2);
 
-    public AdjustmentValue? GetValue(CommandContext ctx)
+    public bool RenderImage(CommandContext ctx, IRenderCanvas canvas)
     {
         string? deviceId = BluetoothCommands.ReadParameter(ctx, 0);
-        return DeviceDisplay.Value(Store, deviceId, ctx.Host, showTrust: action is DeviceAction.Trust or DeviceAction.Untrust);
+        DeviceDisplay.Draw(canvas, Store, deviceId, ctx.Host, showTrust: action is DeviceAction.Trust or DeviceAction.Untrust);
+        return true;
     }
 
     protected override async Task ExecuteCore(CommandContext ctx)
@@ -158,31 +161,34 @@ internal sealed class FavoriteCommand(CommandDescriptor descriptor, bool add, Bl
 /// <summary>The texts every device key and folder entry shows, built from cached state only.</summary>
 internal static class DeviceDisplay
 {
-    /// <summary>The value of a device key: the name, then the state with the battery level, and the ring.</summary>
-    public static AdjustmentValue? Value(BluetoothStateStore store, string? deviceId, IPluginHost host, bool showTrust = false)
+    /// <summary>
+    /// Draws a device key: the device's tile, or a placeholder when no device is set, the device is
+    /// gone or Bluetooth is unavailable.
+    /// </summary>
+    public static void Draw(IRenderCanvas canvas, BluetoothStateStore store, string? deviceId, IPluginHost host, bool showTrust = false)
     {
-        if (deviceId is null)
-        {
-            return new AdjustmentValue(double.NaN, host.Tr("No device"));
-        }
-
         BluetoothSnapshot snapshot = store.Current;
-        BluetoothDeviceState? device = snapshot.FindDevice(deviceId);
-        DeviceConnectionState state = store.StateOf(deviceId, snapshot);
 
-        if (device is null)
+        if (snapshot.FindDevice(deviceId) is not { } device)
         {
-            string reason = snapshot.IsAvailable ? "Device not found" : "Bluetooth unavailable";
-            return new AdjustmentValue(double.NaN, deviceId) { Detail = host.Tr(reason) };
+            string reason = deviceId is null ? "No device" : snapshot.IsAvailable ? "Device not found" : "Bluetooth unavailable";
+            TileRenderer.Draw(canvas, TileRenderer.UnavailableColor, "bluetooth-off", TileRenderer.DimTextColor, host.Tr(reason), null, null);
+            return;
         }
 
-        string detail = showTrust
+        DeviceConnectionState state = store.StateOf(device.StableId, snapshot);
+        string stateText = showTrust
             ? host.Tr(device.Trusted ? "Trusted" : "Not trusted")
-            : StateText(store, state, device, host);
+            : TileStateText(store, state, device, host);
 
-        double normalized = device.BatteryPercent is byte battery ? battery / 100.0 : double.NaN;
-        return new AdjustmentValue(normalized, device.DisplayName) { Detail = detail };
+        TileRenderer.DrawDevice(canvas, device, state, stateText, TileRenderer.StateColor(state));
     }
+
+    /// <summary>The state line of a tile: the failure reason while one is remembered, else the state.</summary>
+    public static string TileStateText(BluetoothStateStore store, DeviceConnectionState state, BluetoothDeviceState device, IPluginHost host) =>
+        state == DeviceConnectionState.Failed && store.FailureOf(device.StableId) is { } reason
+            ? host.Tr(reason)
+            : host.Tr(DeviceConnectionStates.ToEnglishText(state));
 
     /// <summary>"Connected · 82 %", or the failure reason while a failure is remembered.</summary>
     public static string StateText(BluetoothStateStore store, DeviceConnectionState state, BluetoothDeviceState device, IPluginHost host)
