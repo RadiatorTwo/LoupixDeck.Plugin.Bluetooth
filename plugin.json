@@ -1,0 +1,12 @@
+{
+  "id": "bluetooth",
+  "name": "Bluetooth",
+  "version": "1.0.0",
+  "sdkVersion": "1.31",
+  "entryAssembly": "LoupixDeck.Plugin.Bluetooth.dll",
+  "platform": "All",
+  "author": "",
+  "description": "",
+  "projectUrl": "",
+  "iconFile": ""
+}
