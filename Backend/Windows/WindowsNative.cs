@@ -29,6 +29,7 @@ internal static class WindowsNative
     public const uint KsPropertyTypeGet = 1;
 
     public static readonly Guid MMDeviceEnumeratorClsid = new("BCDE0395-E52F-467C-8E3D-C4579291692E");
+    public static readonly Guid MMDeviceEnumeratorIid = new("A95664D2-9614-4F35-A746-DE8DB63617E6");
     public static readonly Guid DeviceTopologyIid = new("2A07407E-6497-4A18-9787-32F79BD0D98F");
     public static readonly Guid KsControlIid = new("28F54685-06FD-11D2-B27A-00A0C9223196");
 
@@ -134,127 +135,138 @@ internal static class WindowsNative
     [DllImport("ole32.dll", ExactSpelling = true)]
     public static extern int PropVariantClear(ref PropVariant value);
 
-    [ComImport]
-    [Guid("A95664D2-9614-4F35-A746-DE8DB63617E6")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    public interface IMMDeviceEnumerator
+    [DllImport("ole32.dll", ExactSpelling = true)]
+    private static extern unsafe int CoCreateInstance(Guid* classId, IntPtr outer, uint context, Guid* interfaceId, IntPtr* instance);
+
+    // The COM calls below go straight through the vtable instead of [ComImport] interfaces. Built-in
+    // COM marshalling turns every interface pointer into an object through the process-wide
+    // ComWrappers instance once anyone registered one (CsWinRT in another plugin does), and the
+    // cast to a [ComImport] interface then fails. Raw pointers do not depend on that.
+    // Slot numbers follow the interface declarations in mmdeviceapi.h, devicetopology.h and ks.h;
+    // slots 0 to 2 are IUnknown.
+
+    private static unsafe void** VTable(IntPtr instance) => *(void***)instance;
+
+    public static unsafe void Release(IntPtr instance)
     {
-        [PreserveSig]
-        int EnumAudioEndpoints(int dataFlow, uint stateMask, out IMMDeviceCollection devices);
-
-        [PreserveSig]
-        int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice endpoint);
-
-        [PreserveSig]
-        int GetDevice([MarshalAs(UnmanagedType.LPWStr)] string id, out IMMDevice device);
-    }
-
-    [ComImport]
-    [Guid("0BD7A1BE-7A1A-44DB-8397-CC5392387B5E")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    public interface IMMDeviceCollection
-    {
-        [PreserveSig]
-        int GetCount(out uint count);
-
-        [PreserveSig]
-        int Item(uint index, out IMMDevice device);
-    }
-
-    [ComImport]
-    [Guid("D666063F-1587-4E43-81F1-B948E807363F")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    public interface IMMDevice
-    {
-        [PreserveSig]
-        int Activate(ref Guid iid, uint clsCtx, IntPtr activationParams, [MarshalAs(UnmanagedType.IUnknown)] out object instance);
-
-        [PreserveSig]
-        int OpenPropertyStore(uint access, out IPropertyStore properties);
-
-        [PreserveSig]
-        int GetId([MarshalAs(UnmanagedType.LPWStr)] out string id);
-
-        [PreserveSig]
-        int GetState(out uint state);
-    }
-
-    [ComImport]
-    [Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    public interface IPropertyStore
-    {
-        [PreserveSig]
-        int GetCount(out uint count);
-
-        [PreserveSig]
-        int GetAt(uint index, out PropertyKey key);
-
-        [PreserveSig]
-        int GetValue(ref PropertyKey key, out PropVariant value);
-    }
-
-    [ComImport]
-    [Guid("2A07407E-6497-4A18-9787-32F79BD0D98F")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    public interface IDeviceTopology
-    {
-        [PreserveSig]
-        int GetConnectorCount(out uint count);
-
-        [PreserveSig]
-        int GetConnector(uint index, out IConnector connector);
-    }
-
-    [ComImport]
-    [Guid("9C2C4058-23F5-41DE-877A-DF3AF236A09E")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    public interface IConnector
-    {
-        [PreserveSig]
-        int GetConnectorType(out int type);
-
-        [PreserveSig]
-        int GetDataFlow(out int flow);
-
-        [PreserveSig]
-        int ConnectTo(IConnector other);
-
-        [PreserveSig]
-        int Disconnect();
-
-        [PreserveSig]
-        int IsConnected([MarshalAs(UnmanagedType.Bool)] out bool connected);
-
-        [PreserveSig]
-        int GetConnectedTo(out IConnector other);
-
-        [PreserveSig]
-        int GetConnectorIdConnectedTo([MarshalAs(UnmanagedType.LPWStr)] out string id);
-
-        [PreserveSig]
-        int GetDeviceIdConnectedTo([MarshalAs(UnmanagedType.LPWStr)] out string id);
-    }
-
-    [ComImport]
-    [Guid("28F54685-06FD-11D2-B27A-00A0C9223196")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    public interface IKsControl
-    {
-        [PreserveSig]
-        int KsProperty(ref KsProperty property, uint propertyLength, IntPtr propertyData, uint dataLength, out uint bytesReturned);
-    }
-
-    [ComImport]
-    [Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]
-    public class MMDeviceEnumerator;
-
-    /// <summary>Releases a runtime callable wrapper now instead of at the next finalizer run.</summary>
-    public static void Release(object? comObject)
-    {
-        if (comObject is not null && Marshal.IsComObject(comObject))
+        if (instance != IntPtr.Zero)
         {
-            Marshal.ReleaseComObject(comObject);
+            ((delegate* unmanaged[Stdcall]<IntPtr, uint>)VTable(instance)[2])(instance);
         }
+    }
+
+    public static unsafe int CreateDeviceEnumerator(out IntPtr enumerator)
+    {
+        Guid classId = MMDeviceEnumeratorClsid;
+        Guid interfaceId = MMDeviceEnumeratorIid;
+        IntPtr result;
+        int hr = CoCreateInstance(&classId, IntPtr.Zero, ClsctxAll, &interfaceId, &result);
+        enumerator = hr == SOk ? result : IntPtr.Zero;
+        return hr;
+    }
+
+    /// <summary>IMMDeviceEnumerator::EnumAudioEndpoints.</summary>
+    public static unsafe int EnumAudioEndpoints(IntPtr enumerator, int dataFlow, uint stateMask, out IntPtr collection)
+    {
+        IntPtr result;
+        int hr = ((delegate* unmanaged[Stdcall]<IntPtr, int, uint, IntPtr*, int>)VTable(enumerator)[3])(enumerator, dataFlow, stateMask, &result);
+        collection = hr == SOk ? result : IntPtr.Zero;
+        return hr;
+    }
+
+    /// <summary>IMMDeviceEnumerator::GetDevice.</summary>
+    public static unsafe int GetDevice(IntPtr enumerator, string id, out IntPtr device)
+    {
+        IntPtr result;
+        int hr;
+
+        fixed (char* text = id)
+        {
+            hr = ((delegate* unmanaged[Stdcall]<IntPtr, char*, IntPtr*, int>)VTable(enumerator)[5])(enumerator, text, &result);
+        }
+
+        device = hr == SOk ? result : IntPtr.Zero;
+        return hr;
+    }
+
+    /// <summary>IMMDeviceCollection::GetCount.</summary>
+    public static unsafe int GetCount(IntPtr collection, out uint count)
+    {
+        uint result;
+        int hr = ((delegate* unmanaged[Stdcall]<IntPtr, uint*, int>)VTable(collection)[3])(collection, &result);
+        count = hr == SOk ? result : 0;
+        return hr;
+    }
+
+    /// <summary>IMMDeviceCollection::Item.</summary>
+    public static unsafe int Item(IntPtr collection, uint index, out IntPtr device)
+    {
+        IntPtr result;
+        int hr = ((delegate* unmanaged[Stdcall]<IntPtr, uint, IntPtr*, int>)VTable(collection)[4])(collection, index, &result);
+        device = hr == SOk ? result : IntPtr.Zero;
+        return hr;
+    }
+
+    /// <summary>IMMDevice::Activate.</summary>
+    public static unsafe int Activate(IntPtr device, Guid interfaceId, out IntPtr instance)
+    {
+        IntPtr result;
+        int hr = ((delegate* unmanaged[Stdcall]<IntPtr, Guid*, uint, IntPtr, IntPtr*, int>)VTable(device)[3])(device, &interfaceId, ClsctxAll, IntPtr.Zero, &result);
+        instance = hr == SOk ? result : IntPtr.Zero;
+        return hr;
+    }
+
+    /// <summary>IMMDevice::OpenPropertyStore.</summary>
+    public static unsafe int OpenPropertyStore(IntPtr device, out IntPtr store)
+    {
+        IntPtr result;
+        int hr = ((delegate* unmanaged[Stdcall]<IntPtr, uint, IntPtr*, int>)VTable(device)[4])(device, StgmRead, &result);
+        store = hr == SOk ? result : IntPtr.Zero;
+        return hr;
+    }
+
+    /// <summary>IPropertyStore::GetValue. The caller clears the value with <see cref="PropVariantClear"/>.</summary>
+    public static unsafe int GetValue(IntPtr store, PropertyKey key, out PropVariant value)
+    {
+        PropVariant result;
+        int hr = ((delegate* unmanaged[Stdcall]<IntPtr, PropertyKey*, PropVariant*, int>)VTable(store)[5])(store, &key, &result);
+        value = hr == SOk ? result : default;
+        return hr;
+    }
+
+    /// <summary>IDeviceTopology::GetConnectorCount.</summary>
+    public static unsafe int GetConnectorCount(IntPtr topology, out uint count)
+    {
+        uint result;
+        int hr = ((delegate* unmanaged[Stdcall]<IntPtr, uint*, int>)VTable(topology)[3])(topology, &result);
+        count = hr == SOk ? result : 0;
+        return hr;
+    }
+
+    /// <summary>IDeviceTopology::GetConnector.</summary>
+    public static unsafe int GetConnector(IntPtr topology, uint index, out IntPtr connector)
+    {
+        IntPtr result;
+        int hr = ((delegate* unmanaged[Stdcall]<IntPtr, uint, IntPtr*, int>)VTable(topology)[4])(topology, index, &result);
+        connector = hr == SOk ? result : IntPtr.Zero;
+        return hr;
+    }
+
+    /// <summary>IConnector::GetDeviceIdConnectedTo.</summary>
+    public static unsafe int GetDeviceIdConnectedTo(IntPtr connector, out string? deviceId)
+    {
+        char* result = null;
+        int hr = ((delegate* unmanaged[Stdcall]<IntPtr, char**, int>)VTable(connector)[10])(connector, &result);
+        deviceId = hr == SOk && result != null ? new string(result) : null;
+        Marshal.FreeCoTaskMem((IntPtr)result);
+        return hr;
+    }
+
+    /// <summary>IKsControl::KsProperty without a data buffer.</summary>
+    public static unsafe int KsPropertyCall(IntPtr control, KsProperty property)
+    {
+        uint returned;
+        return ((delegate* unmanaged[Stdcall]<IntPtr, KsProperty*, uint, void*, uint, uint*, int>)VTable(control)[3])(
+            control, &property, (uint)sizeof(KsProperty), null, 0, &returned);
     }
 }

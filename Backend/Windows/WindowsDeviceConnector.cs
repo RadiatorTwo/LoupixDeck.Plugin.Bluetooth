@@ -28,18 +28,22 @@ internal sealed class WindowsDeviceConnector(IPluginLogger logger)
             return null;
         }
 
-        List<string> filterIds = FindAudioFilters(containerId);
-
-        if (filterIds.Count == 0)
+        if (CreateDeviceEnumerator(out IntPtr enumerator) != SOk)
         {
             return null;
         }
 
-        IMMDeviceEnumerator enumerator = CreateEnumerator();
-        bool anySucceeded = false;
-
         try
         {
+            List<string> filterIds = FindAudioFilters(enumerator, containerId);
+
+            if (filterIds.Count == 0)
+            {
+                return null;
+            }
+
+            bool anySucceeded = false;
+
             foreach (string filterId in filterIds)
             {
                 if (SendOneShot(enumerator, filterId, connect))
@@ -47,13 +51,13 @@ internal sealed class WindowsDeviceConnector(IPluginLogger logger)
                     anySucceeded = true;
                 }
             }
+
+            return anySucceeded ? BluetoothCallOutcome.Ok : BluetoothCallOutcome.Failed;
         }
         finally
         {
             Release(enumerator);
         }
-
-        return anySucceeded ? BluetoothCallOutcome.Ok : BluetoothCallOutcome.Failed;
     }
 
     /// <summary>
@@ -154,23 +158,22 @@ internal sealed class WindowsDeviceConnector(IPluginLogger logger)
     /// The device ids of the Bluetooth audio filters behind every endpoint of the device. A headset
     /// has several (stereo playback, hands-free playback and microphone), each with its own filter.
     /// </summary>
-    private List<string> FindAudioFilters(Guid containerId)
+    private List<string> FindAudioFilters(IntPtr enumerator, Guid containerId)
     {
         List<string> filterIds = [];
-        IMMDeviceEnumerator enumerator = CreateEnumerator();
-        IMMDeviceCollection? endpoints = null;
+        IntPtr endpoints = IntPtr.Zero;
 
         try
         {
-            if (enumerator.EnumAudioEndpoints(DataFlowAll, DeviceStateMaskAll, out endpoints) != SOk ||
-                endpoints.GetCount(out uint count) != SOk)
+            if (EnumAudioEndpoints(enumerator, DataFlowAll, DeviceStateMaskAll, out endpoints) != SOk ||
+                GetCount(endpoints, out uint count) != SOk)
             {
                 return filterIds;
             }
 
             for (uint index = 0; index < count; index++)
             {
-                if (endpoints.Item(index, out IMMDevice endpoint) != SOk)
+                if (Item(endpoints, index, out IntPtr endpoint) != SOk)
                 {
                     continue;
                 }
@@ -198,7 +201,6 @@ internal sealed class WindowsDeviceConnector(IPluginLogger logger)
         finally
         {
             Release(endpoints);
-            Release(enumerator);
         }
 
         return filterIds;
@@ -208,18 +210,16 @@ internal sealed class WindowsDeviceConnector(IPluginLogger logger)
         filterId.Contains("BTHENUM", StringComparison.OrdinalIgnoreCase) ||
         filterId.Contains("BTHHFENUM", StringComparison.OrdinalIgnoreCase);
 
-    private static Guid ContainerIdOf(IMMDevice endpoint)
+    private static Guid ContainerIdOf(IntPtr endpoint)
     {
-        if (endpoint.OpenPropertyStore(StgmRead, out IPropertyStore properties) != SOk)
+        if (OpenPropertyStore(endpoint, out IntPtr store) != SOk)
         {
             return Guid.Empty;
         }
 
         try
         {
-            PropertyKey key = DeviceContainerIdKey;
-
-            if (properties.GetValue(ref key, out PropVariant value) != SOk)
+            if (GetValue(store, DeviceContainerIdKey, out PropVariant value) != SOk)
             {
                 return Guid.Empty;
             }
@@ -237,32 +237,29 @@ internal sealed class WindowsDeviceConnector(IPluginLogger logger)
         }
         finally
         {
-            Release(properties);
+            Release(store);
         }
     }
 
     /// <summary>The device id of the kernel streaming filter the endpoint's connector leads to.</summary>
-    private static string? FilterIdOf(IMMDevice endpoint)
+    private static string? FilterIdOf(IntPtr endpoint)
     {
-        Guid iid = DeviceTopologyIid;
-
-        if (endpoint.Activate(ref iid, ClsctxAll, IntPtr.Zero, out object instance) != SOk)
+        if (Activate(endpoint, DeviceTopologyIid, out IntPtr topology) != SOk)
         {
             return null;
         }
 
-        IDeviceTopology topology = (IDeviceTopology)instance;
-        IConnector? connector = null;
+        IntPtr connector = IntPtr.Zero;
 
         try
         {
-            if (topology.GetConnectorCount(out uint count) != SOk || count == 0 ||
-                topology.GetConnector(0, out connector) != SOk)
+            if (GetConnectorCount(topology, out uint count) != SOk || count == 0 ||
+                GetConnector(topology, 0, out connector) != SOk)
             {
                 return null;
             }
 
-            return connector.GetDeviceIdConnectedTo(out string filterId) == SOk ? filterId : null;
+            return GetDeviceIdConnectedTo(connector, out string? filterId) == SOk ? filterId : null;
         }
         finally
         {
@@ -271,20 +268,18 @@ internal sealed class WindowsDeviceConnector(IPluginLogger logger)
         }
     }
 
-    private bool SendOneShot(IMMDeviceEnumerator enumerator, string filterId, bool connect)
+    private bool SendOneShot(IntPtr enumerator, string filterId, bool connect)
     {
-        if (enumerator.GetDevice(filterId, out IMMDevice filter) != SOk)
+        if (GetDevice(enumerator, filterId, out IntPtr filter) != SOk)
         {
             return false;
         }
 
-        object? instance = null;
+        IntPtr control = IntPtr.Zero;
 
         try
         {
-            Guid iid = KsControlIid;
-
-            if (filter.Activate(ref iid, ClsctxAll, IntPtr.Zero, out instance) != SOk)
+            if (Activate(filter, KsControlIid, out control) != SOk)
             {
                 return false;
             }
@@ -296,7 +291,7 @@ internal sealed class WindowsDeviceConnector(IPluginLogger logger)
                 Flags = KsPropertyTypeGet
             };
 
-            int result = ((IKsControl)instance).KsProperty(ref property, (uint)Marshal.SizeOf<KsProperty>(), IntPtr.Zero, 0, out _);
+            int result = KsPropertyCall(control, property);
 
             if (result != SOk)
             {
@@ -307,10 +302,8 @@ internal sealed class WindowsDeviceConnector(IPluginLogger logger)
         }
         finally
         {
-            Release(instance);
+            Release(control);
             Release(filter);
         }
     }
-
-    private static IMMDeviceEnumerator CreateEnumerator() => (IMMDeviceEnumerator)new MMDeviceEnumerator();
 }

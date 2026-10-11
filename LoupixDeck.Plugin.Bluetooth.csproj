@@ -11,6 +11,8 @@
     <Nullable>enable</Nullable>
     <LangVersion>default</LangVersion>
     <DebugType>embedded</DebugType>
+    <!-- The Windows backend calls Core Audio and kernel streaming COM interfaces through raw vtables. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
     <!-- Produces a .deps.json and copies dependencies next to the plugin DLL
          so the host's AssemblyDependencyResolver can locate them. -->
