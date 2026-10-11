@@ -27,6 +27,7 @@ internal sealed class DeviceFolderProvider(BluetoothStateStore store, BluetoothS
     private static readonly PluginColor DiscoveryColor = PluginColor.FromRgb(0x0D, 0x3B, 0x66);
     private static readonly PluginColor NavigationColor = PluginColor.FromRgb(0x30, 0x30, 0x30);
     private static readonly PluginColor DimTextColor = PluginColor.FromRgb(0xB0, 0xB0, 0xB0);
+    private static readonly PluginColor SubtitleColor = PluginColor.FromRgb(0xE6, 0xE6, 0xE6);
     private static readonly PluginColor LowBatteryColor = PluginColor.FromRgb(0xFF, 0x8A, 0x65);
     private static readonly PluginColor ConfirmColor = PluginColor.FromRgb(0x2E, 0x7D, 0x32);
     private static readonly PluginColor CancelColor = PluginColor.FromRgb(0x8E, 0x24, 0x24);
@@ -430,26 +431,38 @@ internal sealed class DeviceFolderProvider(BluetoothStateStore store, BluetoothS
         int size = Math.Min(canvas.Width, canvas.Height);
         double k = size / 90.0;
         int Px(double design) => (int)Math.Round(design * k);
+        float Font(double design) => (float)(design * k);
 
         canvas.Clear(back);
 
-        int icon = Px(30);
-        canvas.DrawSymbol(symbol, (canvas.Width - icon) / 2, Px(6), icon, icon, symbolColor);
+        // The fewer lines a tile has, the more room goes to the icon and the text.
+        TileLayout layout = (subtitle, battery) switch
+        {
+            (null, null) => new TileLayout(Icon: 36, IconTop: 8, TitleTop: 50, TitleSize: 15, LineTop: 0, LineSize: 0, BatteryTop: 0),
+            (_, null) or (null, _) => new TileLayout(Icon: 30, IconTop: 5, TitleTop: 41, TitleSize: 14, LineTop: 62, LineSize: 14, BatteryTop: 62),
+            _ => new TileLayout(Icon: 24, IconTop: 3, TitleTop: 32, TitleSize: 13, LineTop: 50, LineSize: 12, BatteryTop: 68)
+        };
 
-        int boxWidth = Px(86);
+        int icon = Px(layout.Icon);
+        canvas.DrawSymbol(symbol, (canvas.Width - icon) / 2, Px(layout.IconTop), icon, icon, symbolColor);
+
+        int boxWidth = Px(88);
         int left = (canvas.Width - boxWidth) / 2;
-        canvas.DrawText(title, left, Px(38), boxWidth, Px(16), PluginColor.White, (float)(11 * k), bold: true);
+        canvas.DrawText(title, left, Px(layout.TitleTop), boxWidth, Px(layout.TitleSize + 6), PluginColor.White, Font(layout.TitleSize), bold: true);
 
         if (subtitle is not null)
         {
-            canvas.DrawText(subtitle, left, Px(54), boxWidth, Px(14), DimTextColor, (float)(9 * k));
+            canvas.DrawText(subtitle, left, Px(layout.LineTop), boxWidth, Px(layout.LineSize + 6), SubtitleColor, Font(layout.LineSize));
         }
 
         if (battery is { } level)
         {
-            canvas.DrawText(level.Text, left, Px(69), boxWidth, Px(14), level.Color, (float)(10 * k), bold: true);
+            canvas.DrawText(level.Text, left, Px(layout.BatteryTop), boxWidth, Px(20), level.Color, Font(15), bold: true);
         }
     }
+
+    /// <summary>Positions and sizes of a tile, in pixels of a 90 px key.</summary>
+    private readonly record struct TileLayout(int Icon, int IconTop, int TitleTop, int TitleSize, int LineTop, int LineSize, int BatteryTop);
 }
 
 /// <summary>Opens the device folder.</summary>
