@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using LoupixDeck.PluginSdk;
 
 namespace LoupixDeck.Plugin.Bluetooth.Rendering;
@@ -18,6 +19,73 @@ internal static class TileRenderer
     public static readonly PluginColor LowBatteryColor = PluginColor.FromRgb(0xFF, 0x8A, 0x65);
     public static readonly PluginColor ConfirmColor = PluginColor.FromRgb(0x2E, 0x7D, 0x32);
     public static readonly PluginColor CancelColor = PluginColor.FromRgb(0x8E, 0x24, 0x24);
+
+    /// <summary>Scroll speed of a line that is too long, in pixels of a 90 px key per second.</summary>
+    private const double ScrollSpeed = 30;
+
+    /// <summary>How long a scrolling line rests at its start before it moves.</summary>
+    private const double ScrollPauseMs = 1500;
+
+    /// <summary>The gap between the end of a scrolling line and its next pass, in pixels of a 90 px key.</summary>
+    private const double ScrollGap = 24;
+
+    /// <summary>One clock for every scrolling line, so lines on neighbouring tiles move together.</summary>
+    private static readonly Stopwatch ScrollClock = Stopwatch.StartNew();
+
+    /// <summary>
+    /// A device found by a discovery: an icon over a large name and a second line. A line that does
+    /// not fit scrolls instead of being shrunk, so the whole name stays readable; the caller has to
+    /// repaint the tile regularly for it to move.
+    /// </summary>
+    public static void DrawScrolling(
+        IRenderCanvas canvas,
+        PluginColor back,
+        string symbol,
+        PluginColor symbolColor,
+        string title,
+        string subtitle)
+    {
+        int size = Math.Min(canvas.Width, canvas.Height);
+        double k = size / 90.0;
+        int Px(double design) => (int)Math.Round(design * k);
+
+        canvas.Clear(back);
+
+        int icon = Px(26);
+        canvas.DrawSymbol(symbol, (canvas.Width - icon) / 2, Px(5), icon, icon, symbolColor);
+
+        ScrollLine(canvas, title, Px(35), Px(22), PluginColor.White, (float)(16 * k), k, bold: true);
+        ScrollLine(canvas, subtitle, Px(61), Px(19), SubtitleColor, (float)(13 * k), k, bold: false);
+    }
+
+    /// <summary>
+    /// Draws one line: centred when it fits, otherwise as a marquee that rests at its start, then
+    /// runs through and comes round again. The canvas ends at the tile's edge, which clips it.
+    /// </summary>
+    private static void ScrollLine(IRenderCanvas canvas, string text, int y, int height, PluginColor color, float fontSize, double k, bool bold)
+    {
+        int margin = (int)Math.Round(3 * k);
+        int available = canvas.Width - (2 * margin);
+        float width = canvas.MeasureText(text, fontSize, bold);
+
+        if (width <= available)
+        {
+            canvas.DrawText(text, 0, y, canvas.Width, height, color, fontSize, bold: bold);
+            return;
+        }
+
+        double period = width + (ScrollGap * k);
+        double speed = ScrollSpeed * k;
+        double cycleMs = ScrollPauseMs + (period / speed * 1000);
+        double t = ScrollClock.Elapsed.TotalMilliseconds % cycleMs;
+        double offset = t < ScrollPauseMs ? 0 : (t - ScrollPauseMs) * speed / 1000;
+
+        // The box is wider than the text, so the canvas never wraps it.
+        int boxWidth = (int)Math.Ceiling(width) + (int)Math.Round(8 * k);
+        int x = margin - (int)Math.Round(offset);
+        canvas.DrawText(text, x, y, boxWidth, height, color, fontSize, TextHAlign.Left, TextVAlign.Middle, bold);
+        canvas.DrawText(text, x + (int)Math.Round(period), y, boxWidth, height, color, fontSize, TextHAlign.Left, TextVAlign.Middle, bold);
+    }
 
     /// <summary>
     /// Tiles drawn here must not set <see cref="FolderEntry.Text"/>: the host draws the text on top

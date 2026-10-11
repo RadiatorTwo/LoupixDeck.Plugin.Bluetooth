@@ -21,15 +21,23 @@ internal sealed class DeviceFolderProvider(BluetoothStateStore store, BluetoothS
 {
 
     private static readonly TimeSpan OverlayDuration = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan MarqueeInterval = TimeSpan.FromMilliseconds(66);
 
     private readonly Lock _lock = new();
     private Timer? _countdown;
+    private Timer? _marquee;
+
+    /// <summary>Set while the folder shows found devices, whose long lines scroll.</summary>
+    private volatile bool _scrolling;
     private int _page;
 
     public override string Title => host.Tr("Bluetooth");
 
     public override IReadOnlyList<FolderEntry> BuildEntries()
     {
+        // Set again by every found device this build shows.
+        _scrolling = false;
+
         FolderGridInfo grid = host.FolderGrid;
         BluetoothSnapshot snapshot = store.Current;
 
@@ -106,6 +114,10 @@ internal sealed class DeviceFolderProvider(BluetoothStateStore store, BluetoothS
 
         // The discovery entry counts down; only a running discovery needs the tick.
         _countdown = new Timer(_ => Tick(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+
+        // Found devices scroll a name that is too long; the repaint is what moves it. About 15 frames
+        // per second, and only while such tiles are shown.
+        _marquee = new Timer(_ => ScrollTick(), null, MarqueeInterval, MarqueeInterval);
     }
 
     public override void OnExit()
@@ -113,9 +125,19 @@ internal sealed class DeviceFolderProvider(BluetoothStateStore store, BluetoothS
         store.Changed -= OnStoreChanged;
         _countdown?.Dispose();
         _countdown = null;
+        _marquee?.Dispose();
+        _marquee = null;
     }
 
     private void OnStoreChanged() => RaiseEntriesChanged();
+
+    private void ScrollTick()
+    {
+        if (_scrolling)
+        {
+            RaiseEntriesChanged();
+        }
+    }
 
     private void Tick()
     {
@@ -265,6 +287,20 @@ internal sealed class DeviceFolderProvider(BluetoothStateStore store, BluetoothS
         }
 
         string? battery = device.BatteryPercent is byte percent ? percent.ToString(CultureInfo.InvariantCulture) + " %" : null;
+
+        if (!device.Paired)
+        {
+            // A found device: large text that scrolls when it is too long.
+            _scrolling = true;
+
+            return new FolderEntry
+            {
+                SlotIndex = slot,
+                BackColor = back,
+                Render = canvas => TileRenderer.DrawScrolling(canvas, back, BluetoothDeviceKinds.SymbolName(device.Kind), TileRenderer.DimTextColor, device.DisplayName, stateText),
+                OnPress = () => DevicePressAsync(slot, device)
+            };
+        }
 
         return new FolderEntry
         {
