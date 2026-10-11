@@ -40,7 +40,7 @@ internal static class BluetoothButtonLayouts
     // Pixel values for a 90 px key; the host scales them onto the key actually being written.
     private const double IconScale = 0.5;
     private const int IconOffsetY = -9;
-    private const int CaptionSize = 13;
+    private const int CaptionSize = 11;
     private const int CaptionOffsetY = 27;
     private const int CaptionBoxWidth = 88;
     private const int CaptionBoxHeight = 22;
@@ -49,7 +49,6 @@ internal static class BluetoothButtonLayouts
     // device name and its state.
     private const double TallIconScale = 0.36;
     private const int TallIconOffsetY = -19;
-    private const int TallCaptionSize = 12;
     private const int TallCaptionOffsetY = 17;
     private const int TallCaptionBoxHeight = 40;
 
@@ -85,7 +84,7 @@ internal static class BluetoothButtonLayouts
             {
                 Kind = ButtonLayerKind.Text,
                 Text = caption == null ? null : Translate(caption),
-                TextSize = tall ? TallCaptionSize : CaptionSize,
+                TextSize = CaptionSize,
                 OffsetY = tall ? TallCaptionOffsetY : CaptionOffsetY,
                 BoxWidth = CaptionBoxWidth,
                 BoxHeight = tall ? TallCaptionBoxHeight : CaptionBoxHeight
@@ -128,20 +127,20 @@ internal static class BluetoothButtonLayouts
                 Kind = ButtonLayerKind.Text,
                 Name = "Device",
                 TextSource = ButtonTextSource.Value,
-                TextSize = 13,
-                OffsetY = 23,
+                TextSize = 11,
+                OffsetY = 22,
                 BoxWidth = CaptionBoxWidth,
-                BoxHeight = 18
+                BoxHeight = 16
             },
             new ButtonLayerDescriptor
             {
                 Kind = ButtonLayerKind.Text,
                 Name = "State",
                 TextSource = ButtonTextSource.Detail,
-                TextSize = 11,
-                OffsetY = 37,
+                TextSize = 9,
+                OffsetY = 36,
                 BoxWidth = CaptionBoxWidth,
-                BoxHeight = 16
+                BoxHeight = 14
             }
         ]
     };
