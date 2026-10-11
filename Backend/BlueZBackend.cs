@@ -24,6 +24,8 @@ internal sealed class BlueZBackend : IBluetoothBackend
     private const string AdapterInterface = "org.bluez.Adapter1";
     private const string DeviceInterface = "org.bluez.Device1";
     private const string BatteryInterface = "org.bluez.Battery1";
+    private const string AgentManagerInterface = "org.bluez.AgentManager1";
+    private const string AgentPathPrefix = "/org/loupixdeck/bluetooth/agent";
 
     private static readonly TimeSpan Debounce = TimeSpan.FromMilliseconds(150);
 
@@ -39,6 +41,7 @@ internal sealed class BlueZBackend : IBluetoothBackend
 
     private volatile BluetoothSnapshot _current = BluetoothSnapshot.Unavailable;
     private int _generation;
+    private int _agentCounter;
     private volatile bool _disposed;
 
     public BlueZBackend(IPluginLogger logger)
@@ -149,6 +152,83 @@ internal sealed class BlueZBackend : IBluetoothBackend
 
     public Task<BluetoothCallOutcome> StopDiscoveryAsync(string adapterAddress) =>
         CallAdapterAsync(adapterAddress, "StopDiscovery");
+
+    public async Task<BluetoothCallOutcome> PairAsync(string deviceId, IPairingPrompt prompt, TimeSpan timeout, CancellationToken cancellation)
+    {
+        DBusClient? client = _connection.Client;
+
+        if (client is null || !_current.IsAvailable)
+        {
+            return BluetoothCallOutcome.Unavailable;
+        }
+
+        if (_current.FindDevice(deviceId) is not { } device)
+        {
+            return BluetoothCallOutcome.NotFound;
+        }
+
+        string agentPath = AgentPathPrefix + Interlocked.Increment(ref _agentCounter).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        BlueZPairingAgent agent = new(agentPath, device.Path, prompt, _logger);
+        client.Connection.AddMethodHandler(agent);
+
+        try
+        {
+            // Registered for this client only: BlueZ asks the agent of whoever called Pair.
+            BluetoothCallOutcome registered = await client.CallAsync(
+                Service,
+                BlueZPath,
+                AgentManagerInterface,
+                "RegisterAgent",
+                "os",
+                (ref MessageWriter writer) =>
+                {
+                    writer.WriteObjectPath(agentPath);
+                    writer.WriteString(BlueZPairingAgent.Capability);
+                }).ConfigureAwait(false);
+
+            if (registered != BluetoothCallOutcome.Ok)
+            {
+                return registered;
+            }
+
+            // A cancel from the deck, or a timeout, has to reach BlueZ as well; otherwise the
+            // device keeps waiting for a pairing nobody answers.
+            await using CancellationTokenRegistration onCancel = cancellation.Register(() =>
+            {
+                agent.Close();
+                _ = client.CallAsync(Service, device.Path, DeviceInterface, "CancelPairing");
+            });
+
+            BluetoothCallOutcome outcome = await client.CallAsync(Service, device.Path, DeviceInterface, "Pair", timeout: timeout).ConfigureAwait(false);
+
+            if (cancellation.IsCancellationRequested && outcome != BluetoothCallOutcome.Ok)
+            {
+                outcome = BluetoothCallOutcome.Cancelled;
+            }
+            else if (outcome == BluetoothCallOutcome.Timeout)
+            {
+                _ = client.CallAsync(Service, device.Path, DeviceInterface, "CancelPairing");
+            }
+
+            return outcome;
+        }
+        finally
+        {
+            // The agent must never outlive its pairing, whatever happened above.
+            agent.Close();
+
+            await client.CallAsync(
+                Service,
+                BlueZPath,
+                AgentManagerInterface,
+                "UnregisterAgent",
+                "o",
+                (ref MessageWriter writer) => writer.WriteObjectPath(agentPath)).ConfigureAwait(false);
+
+            client.Connection.RemoveMethodHandler(agentPath);
+            await RefreshAsync().ConfigureAwait(false);
+        }
+    }
 
     private async Task<BluetoothCallOutcome> CallDeviceAsync(string deviceId, string member, TimeSpan timeout)
     {

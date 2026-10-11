@@ -45,7 +45,7 @@ internal sealed class BluetoothSettingsPage(BluetoothStateStore store, IPluginHo
             Key = BluetoothSettings.PairedOnlyKey,
             Label = "Show paired devices only",
             Kind = PluginSettingKind.Toggle,
-            Description = "Off: the device folder also lists devices found by discovery.",
+            Description = "Off: devices found by a discovery stay listed in the device folder after the discovery ends.",
             DefaultValue = BluetoothSettings.DefaultPairedOnly
         },
         new PluginSettingDescriptor

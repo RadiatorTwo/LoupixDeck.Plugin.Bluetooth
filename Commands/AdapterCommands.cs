@@ -74,7 +74,7 @@ internal sealed class DiscoveryCommand(BluetoothStateStore store) : BluetoothCom
     private static CommandDescriptor Describe() => BluetoothCommands.SwitchDescriptor(
         BluetoothCommands.Discovery,
         "Discover Devices",
-        "Look for devices nearby for a limited time (see the settings). Pairing new devices is not supported yet.",
+        "Look for devices nearby for a limited time (see the settings). Found devices appear in the device folder, where a press pairs them.",
         BluetoothButtonLayouts.Discovery,
         States);
 }

@@ -29,6 +29,12 @@ internal sealed class BluetoothStateStore : IDisposable
     /// <summary>How long a new discovery session is kept before the snapshot has to confirm it.</summary>
     private static readonly TimeSpan DiscoveryStartGrace = TimeSpan.FromSeconds(3);
 
+    /// <summary>How long a pairing may take, including the time the user needs to confirm a code.</summary>
+    private static readonly TimeSpan PairTimeout = TimeSpan.FromSeconds(90);
+
+    /// <summary>How long the outcome of a pairing stays in the folder before the list returns.</summary>
+    private static readonly TimeSpan PairingResultDuration = TimeSpan.FromSeconds(4);
+
     private readonly IBluetoothBackend _backend;
     private readonly BluetoothSettings _settings;
     private readonly IPluginLogger _logger;
@@ -59,12 +65,18 @@ internal sealed class BluetoothStateStore : IDisposable
 
     public BluetoothCapabilities Capabilities => _backend.Capabilities;
 
+    private volatile PairingSession? _pairing;
+
+    /// <summary>The pairing started from the deck, while it runs and briefly after, or null.</summary>
+    public PairingSession? Pairing => _pairing;
+
     /// <summary>The last error any action ended with, in English, or null.</summary>
     public string? LastError { get; private set; }
 
     public void Dispose()
     {
         _backend.Changed -= OnBackendChanged;
+        _pairing?.Cancel();
 
         foreach (DiscoverySession session in _discoveries.Values)
         {
@@ -301,6 +313,96 @@ internal sealed class BluetoothStateStore : IDisposable
         return outcome is BluetoothCallOutcome.Ok or BluetoothCallOutcome.Failed or BluetoothCallOutcome.NotFound or BluetoothCallOutcome.Unavailable
             ? new BluetoothActionResult(BluetoothCallOutcome.Ok)
             : Fail(null, outcome);
+    }
+
+    /// <summary>
+    /// Pairs a device found by discovery, then trusts and connects it, so a headset is ready to use
+    /// after one press. Only one pairing runs at a time; <see cref="Pairing"/> shows its progress.
+    /// </summary>
+    public async Task<BluetoothActionResult> PairAsync(string deviceId)
+    {
+        if (Current.FindDevice(deviceId) is not { } device)
+        {
+            return Fail(null, BluetoothCallOutcome.NotFound);
+        }
+
+        if (device.Paired)
+        {
+            return await ConnectAsync(device.StableId).ConfigureAwait(false);
+        }
+
+        PairingSession session = new(device);
+
+        if (Interlocked.CompareExchange(ref _pairing, session, null) is not null)
+        {
+            session.Dispose();
+            return new BluetoothActionResult(BluetoothCallOutcome.InProgress);
+        }
+
+        session.Changed += RaiseChanged;
+        RaiseChanged();
+
+        try
+        {
+            // A running discovery competes with the pairing for the radio.
+            if (Current.AdapterOf(device) is { } adapter && IsDiscovering(adapter))
+            {
+                await StopDiscoveryAsync(adapter.Address).ConfigureAwait(false);
+            }
+
+            BluetoothCallOutcome outcome = await _backend.PairAsync(device.StableId, session, PairTimeout, session.Cancellation).ConfigureAwait(false);
+
+            if (outcome != BluetoothCallOutcome.Ok)
+            {
+                session.Finish(false, BluetoothErrors.ToEnglishText(outcome));
+                _logger.Info($"Bluetooth: pairing {device.DisplayName} ended: {BluetoothErrors.ToEnglishText(outcome)}.");
+                return Fail(null, outcome);
+            }
+
+            session.MarkConnecting();
+
+            // Trusted lets the device reconnect on its own later, which is what a paired device is for.
+            BluetoothCallOutcome trusted = await _backend.SetTrustedAsync(device.StableId, true).ConfigureAwait(false);
+            if (trusted != BluetoothCallOutcome.Ok)
+            {
+                _logger.Info($"Bluetooth: could not trust {device.DisplayName}: {BluetoothErrors.ToEnglishText(trusted)}.");
+            }
+
+            BluetoothCallOutcome connected = await _backend.ConnectAsync(device.StableId, _settings.ConnectTimeout).ConfigureAwait(false);
+            session.Finish(true, connected == BluetoothCallOutcome.Ok ? "Paired and connected" : "Paired, not connected");
+            return new BluetoothActionResult(BluetoothCallOutcome.Ok);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"Bluetooth: pairing {device.DisplayName} failed: {ex.Message}");
+            session.Finish(false, "Failed");
+            return Fail(null, BluetoothCallOutcome.Failed);
+        }
+        finally
+        {
+            _ = Task.Delay(PairingResultDuration).ContinueWith(_ => EndPairing(session), TaskScheduler.Default);
+        }
+    }
+
+    /// <summary>Returns the folder from a finished pairing to the device list right away.</summary>
+    public void DismissPairing()
+    {
+        if (_pairing is { IsFinished: true } session)
+        {
+            EndPairing(session);
+        }
+    }
+
+    private void EndPairing(PairingSession session)
+    {
+        if (Interlocked.CompareExchange(ref _pairing, null, session) != session)
+        {
+            return;
+        }
+
+        session.Changed -= RaiseChanged;
+        session.Dispose();
+        RaiseChanged();
     }
 
     /// <summary>Errors that a second attempt cannot fix.</summary>

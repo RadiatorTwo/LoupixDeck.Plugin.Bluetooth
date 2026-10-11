@@ -31,6 +31,12 @@ public enum BluetoothCallOutcome
     /// <summary>The backend cannot do this on the current platform.</summary>
     NotSupported,
 
+    /// <summary>The device or the user refused the pairing, or the codes did not match.</summary>
+    Rejected,
+
+    /// <summary>The user or the device cancelled the pairing.</summary>
+    Cancelled,
+
     /// <summary>The call reached BlueZ and was rejected, or the connection attempt failed.</summary>
     Failed
 }
@@ -53,6 +59,15 @@ internal static class BluetoothErrors
     public const string Blocked = "org.bluez.Error.Blocked";
     public const string InProgress = "org.bluez.Error.InProgress";
     public const string NotSupported = "org.bluez.Error.NotSupported";
+    public const string Rejected = "org.bluez.Error.Rejected";
+    public const string Canceled = "org.bluez.Error.Canceled";
+    public const string AuthenticationFailed = "org.bluez.Error.AuthenticationFailed";
+    public const string AuthenticationRejected = "org.bluez.Error.AuthenticationRejected";
+    public const string AuthenticationCanceled = "org.bluez.Error.AuthenticationCanceled";
+    public const string AuthenticationTimeout = "org.bluez.Error.AuthenticationTimeout";
+
+    /// <summary>A pairing request for a device that is already paired.</summary>
+    public const string AlreadyExists = "org.bluez.Error.AlreadyExists";
 
     /// <summary>
     /// Answers to a request for something that already holds. The caller already has what it asked
@@ -81,7 +96,10 @@ internal static class BluetoothErrors
         return errorName switch
         {
             null or "" => BluetoothCallOutcome.Failed,
-            AlreadyConnected or NotConnected => BluetoothCallOutcome.Ok,
+            AlreadyConnected or NotConnected or AlreadyExists => BluetoothCallOutcome.Ok,
+            Rejected or AuthenticationFailed or AuthenticationRejected => BluetoothCallOutcome.Rejected,
+            Canceled or AuthenticationCanceled => BluetoothCallOutcome.Cancelled,
+            AuthenticationTimeout => BluetoothCallOutcome.Timeout,
             AccessDenied or InteractiveAuthorizationRequired or NotAuthorized => BluetoothCallOutcome.PermissionDenied,
             UnknownObject or UnknownMethod or DoesNotExist => BluetoothCallOutcome.NotFound,
             NotReady => BluetoothCallOutcome.AdapterOff,
@@ -109,6 +127,8 @@ internal static class BluetoothErrors
             BluetoothCallOutcome.Unavailable => "Bluetooth unavailable",
             BluetoothCallOutcome.Timeout => "Timed out",
             BluetoothCallOutcome.NotSupported => "Not supported",
+            BluetoothCallOutcome.Rejected => "Pairing rejected",
+            BluetoothCallOutcome.Cancelled => "Cancelled",
             _ => "Failed"
         };
     }

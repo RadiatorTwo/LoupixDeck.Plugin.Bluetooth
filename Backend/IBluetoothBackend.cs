@@ -15,7 +15,8 @@ internal enum BluetoothCapabilities
     Trust = 4,
     Discovery = 8,
     Battery = 16,
-    All = AdapterPower | Connect | Trust | Discovery | Battery
+    Pairing = 32,
+    All = AdapterPower | Connect | Trust | Discovery | Battery | Pairing
 }
 
 /// <summary>
@@ -55,6 +56,25 @@ internal interface IBluetoothBackend : IDisposable
     Task<BluetoothCallOutcome> StartDiscoveryAsync(string adapterAddress);
 
     Task<BluetoothCallOutcome> StopDiscoveryAsync(string adapterAddress);
+
+    /// <summary>
+    /// Pairs a device. Codes the user has to see or confirm go through <paramref name="prompt"/>.
+    /// Cancelling <paramref name="cancellation"/> aborts the pairing.
+    /// </summary>
+    Task<BluetoothCallOutcome> PairAsync(string deviceId, IPairingPrompt prompt, TimeSpan timeout, CancellationToken cancellation);
+}
+
+/// <summary>What a pairing asks of the user. Called on a background thread.</summary>
+internal interface IPairingPrompt
+{
+    /// <summary>A code the user types on the device, such as a keyboard, and confirms there.</summary>
+    void ShowCode(string code);
+
+    /// <summary>A code both sides show; the user confirms that they match. True accepts.</summary>
+    Task<bool> ConfirmAsync(string code, CancellationToken cancellation);
+
+    /// <summary>The device asked for something the deck cannot provide, such as typing a PIN.</summary>
+    void Unsupported(string englishReason);
 }
 
 /// <summary>The backend for a platform the plugin has no implementation for yet.</summary>
@@ -85,6 +105,8 @@ internal sealed class UnsupportedBluetoothBackend : IBluetoothBackend
     public Task<BluetoothCallOutcome> StartDiscoveryAsync(string adapterAddress) => NotSupported();
 
     public Task<BluetoothCallOutcome> StopDiscoveryAsync(string adapterAddress) => NotSupported();
+
+    public Task<BluetoothCallOutcome> PairAsync(string deviceId, IPairingPrompt prompt, TimeSpan timeout, CancellationToken cancellation) => NotSupported();
 
     public void Dispose()
     {

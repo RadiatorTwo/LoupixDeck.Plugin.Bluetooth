@@ -8,8 +8,13 @@ namespace LoupixDeck.Plugin.Bluetooth.Folder;
 
 /// <summary>
 /// The touch-screen folder that lists the known devices with their state and battery level,
-/// connected ones first. Pressing a paired device connects or disconnects it. The first entry runs a
-/// time-limited discovery; with "paired devices only" off, the devices it finds show up as well.
+/// connected ones first. Pressing a paired device connects or disconnects it.
+/// <para>
+/// The first entry runs a time-limited discovery. While it runs, the named devices it finds are
+/// listed after the paired ones (with "paired devices only" off they stay listed afterwards), and
+/// pressing one pairs, trusts and connects it. During a pairing the folder shows the pairing
+/// instead: the code to compare or type, and the buttons to confirm or cancel.
+/// </para>
 /// </summary>
 internal sealed class DeviceFolderProvider(BluetoothStateStore store, BluetoothSettings settings, IPluginHost host) : FolderProviderBase
 {
@@ -23,6 +28,8 @@ internal sealed class DeviceFolderProvider(BluetoothStateStore store, BluetoothS
     private static readonly PluginColor NavigationColor = PluginColor.FromRgb(0x30, 0x30, 0x30);
     private static readonly PluginColor DimTextColor = PluginColor.FromRgb(0xB0, 0xB0, 0xB0);
     private static readonly PluginColor LowBatteryColor = PluginColor.FromRgb(0xFF, 0x8A, 0x65);
+    private static readonly PluginColor ConfirmColor = PluginColor.FromRgb(0x2E, 0x7D, 0x32);
+    private static readonly PluginColor CancelColor = PluginColor.FromRgb(0x8E, 0x24, 0x24);
 
     private static readonly TimeSpan OverlayDuration = TimeSpan.FromSeconds(2);
 
@@ -42,19 +49,27 @@ internal sealed class DeviceFolderProvider(BluetoothStateStore store, BluetoothS
             return [Message(grid, BluetoothErrors.ToEnglishText(BluetoothCallOutcome.Unavailable))];
         }
 
+        if (store.Pairing is { } pairing)
+        {
+            return PairingEntries(grid, pairing);
+        }
+
         List<FolderEntry> entries = [];
         int index = 0;
+        BluetoothAdapterState? adapter = store.ResolveAdapter(null);
+        bool discovering = adapter is not null && (adapter.Discovering || store.IsDiscovering(adapter));
 
-        if (store.Capabilities.HasFlag(BluetoothCapabilities.Discovery) && store.ResolveAdapter(null) is { } adapter)
+        if (store.Capabilities.HasFlag(BluetoothCapabilities.Discovery) && adapter is not null)
         {
             entries.Add(DiscoveryEntry(grid.SlotForIndex(index++), adapter));
         }
 
-        List<BluetoothDeviceState> devices = [.. DeviceOrdering.Sort(snapshot.Devices.Where(IsListed))];
+        List<BluetoothDeviceState> devices = [.. DeviceOrdering.Sort(snapshot.Devices.Where(device => IsListed(device, discovering)))];
 
         if (devices.Count == 0)
         {
-            entries.Add(Message(grid, settings.PairedOnly ? "No paired devices" : "No devices", index));
+            string empty = discovering ? "Searching for devices" : settings.PairedOnly ? "No paired devices" : "No devices";
+            entries.Add(Message(grid, empty, index));
             return entries;
         }
 
@@ -121,8 +136,108 @@ internal sealed class DeviceFolderProvider(BluetoothStateStore store, BluetoothS
         }
     }
 
-    private bool IsListed(BluetoothDeviceState device) =>
-        (device.Paired || !settings.PairedOnly) && !settings.IsHidden(device.StableId, device.Address);
+    /// <summary>
+    /// Paired devices always; found ones while a discovery runs, or always with "paired devices
+    /// only" off. A found device without a name is left out: BlueZ reports many anonymous BLE
+    /// advertisers nobody wants to pair with.
+    /// </summary>
+    private bool IsListed(BluetoothDeviceState device, bool discovering) =>
+        !settings.IsHidden(device.StableId, device.Address) &&
+        (device.Paired || ((discovering || !settings.PairedOnly) && device.Name.Length > 0));
+
+    /// <summary>The pairing view: what is happening, the code, and what the user can answer.</summary>
+    private List<FolderEntry> PairingEntries(FolderGridInfo grid, PairingSession session)
+    {
+        List<FolderEntry> entries = [];
+        int index = 0;
+
+        string status = session.Stage switch
+        {
+            PairingStage.Confirm => "Does the code match?",
+            PairingStage.TypeCode => "Type the code on the device",
+            PairingStage.Connecting => "Connecting",
+            PairingStage.Succeeded => session.Message ?? "Paired",
+            PairingStage.Failed => session.Message ?? "Pairing failed",
+            _ => "Pairing"
+        };
+
+        PluginColor statusColor = session.Stage switch
+        {
+            PairingStage.Succeeded => ConnectedColor,
+            PairingStage.Failed => FailedColor,
+            _ => BusyColor
+        };
+
+        string statusText = host.Tr(status);
+        entries.Add(new FolderEntry
+        {
+            SlotIndex = grid.SlotForIndex(index++),
+            Text = $"{session.DeviceName}{Environment.NewLine}{statusText}",
+            BackColor = statusColor,
+            TextSize = 13,
+            Render = canvas => DrawTile(canvas, statusColor, "bluetooth-settings", PluginColor.White, session.DeviceName, statusText, null)
+        });
+
+        if (session.Code is { } code)
+        {
+            entries.Add(new FolderEntry
+            {
+                SlotIndex = grid.SlotForIndex(index++),
+                Text = code,
+                BackColor = DiscoveryColor,
+                TextSize = 18,
+                Bold = true,
+                Render = canvas => DrawCode(canvas, code)
+            });
+        }
+
+        if (session.Stage == PairingStage.Confirm)
+        {
+            entries.Add(ActionEntry(grid.SlotForIndex(index++), "Confirm", ConfirmColor, "check", () => session.Answer(true)));
+            entries.Add(ActionEntry(grid.SlotForIndex(index++), "Reject", CancelColor, "close", () => session.Answer(false)));
+        }
+        else if (session.IsFinished)
+        {
+            entries.Add(ActionEntry(grid.SlotForIndex(index++), "Close", NavigationColor, "arrow-left", store.DismissPairing));
+        }
+        else
+        {
+            entries.Add(ActionEntry(grid.SlotForIndex(index++), "Cancel", CancelColor, "close", session.Cancel));
+        }
+
+        return entries;
+    }
+
+    private FolderEntry ActionEntry(int slot, string english, PluginColor color, string symbol, Action press)
+    {
+        string text = host.Tr(english);
+
+        return new FolderEntry
+        {
+            SlotIndex = slot,
+            Text = text,
+            BackColor = color,
+            TextSize = 14,
+            Bold = true,
+            Render = canvas => DrawTile(canvas, color, symbol, PluginColor.White, text, null, null),
+            OnPress = () =>
+            {
+                press();
+                RaiseEntriesChanged();
+                return Task.CompletedTask;
+            }
+        };
+    }
+
+    /// <summary>A pairing code, as large as the tile allows.</summary>
+    private static void DrawCode(IRenderCanvas canvas, string code)
+    {
+        int size = Math.Min(canvas.Width, canvas.Height);
+        double k = size / 90.0;
+
+        canvas.Clear(DiscoveryColor);
+        canvas.DrawText(code, 0, 0, canvas.Width, canvas.Height, PluginColor.White, (float)((code.Length > 6 ? 14 : 19) * k), bold: true);
+    }
 
     /// <summary>The slots a folder page can use; the host keeps the back slot for itself.</summary>
     private static int FreeSlots(FolderGridInfo grid)
@@ -239,8 +354,7 @@ internal sealed class DeviceFolderProvider(BluetoothStateStore store, BluetoothS
     {
         if (!device.Paired)
         {
-            // Pairing needs a BlueZ agent with PIN and passkey dialogs, which this version leaves out.
-            host.OverlayTouchText(slot, host.Tr("Pairing not supported yet"), OverlayDuration);
+            await PairPressAsync(slot, device).ConfigureAwait(false);
             return;
         }
 
@@ -268,10 +382,36 @@ internal sealed class DeviceFolderProvider(BluetoothStateStore store, BluetoothS
         RaiseEntriesChanged();
     }
 
+    private async Task PairPressAsync(int slot, BluetoothDeviceState device)
+    {
+        if (!store.Capabilities.HasFlag(BluetoothCapabilities.Pairing))
+        {
+            host.OverlayTouchText(slot, host.Tr(BluetoothErrors.ToEnglishText(BluetoothCallOutcome.NotSupported)), OverlayDuration);
+            return;
+        }
+
+        try
+        {
+            // The pairing view replaces the list while it runs and reports how it ended.
+            BluetoothActionResult result = await store.PairAsync(device.StableId).ConfigureAwait(false);
+
+            if (result.Outcome == BluetoothCallOutcome.InProgress)
+            {
+                host.OverlayTouchText(slot, host.Tr("Another pairing is running"), OverlayDuration);
+            }
+        }
+        catch (Exception ex)
+        {
+            host.Logger.Warn($"Bluetooth: pairing {device.DisplayName} failed: {ex.Message}");
+        }
+
+        RaiseEntriesChanged();
+    }
+
     private string RssiText(BluetoothDeviceState device) =>
         device.Rssi is short rssi
-            ? $"{host.Tr("Not paired")} · {rssi.ToString(CultureInfo.InvariantCulture)} dBm"
-            : host.Tr("Not paired");
+            ? $"{host.Tr("Press to pair")} · {rssi.ToString(CultureInfo.InvariantCulture)} dBm"
+            : host.Tr("Press to pair");
 
     private static PluginColor ColorFor(DeviceConnectionState state) => state switch
     {
@@ -330,7 +470,7 @@ internal sealed class OpenDeviceFolderCommand(BluetoothStateStore store, Bluetoo
         Group = BluetoothCommands.Group,
         Icon = BluetoothButtonLayouts.Folder,
         ButtonLayout = BluetoothButtonLayouts.IconWithCaption(BluetoothButtonLayouts.Folder, "Bluetooth"),
-        Description = "Open a folder with the paired devices, their state and battery level. A press on a device connects or disconnects it."
+        Description = "Open a folder with the paired devices, their state and battery level. A press connects or disconnects a device; during a discovery, found devices can be paired from here."
     };
 
     public ButtonTargets SupportedTargets => ButtonTargets.TouchButton | ButtonTargets.SimpleButton;
