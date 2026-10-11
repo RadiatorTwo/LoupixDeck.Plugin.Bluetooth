@@ -76,6 +76,7 @@ internal sealed class WinRtBluetoothBackend : IBluetoothBackend
     public WinRtBluetoothBackend(IPluginLogger logger)
     {
         _logger = logger;
+        WinRtComWrappers.InitializeWithoutGlobalRegistration(logger);
         _connector = new WindowsDeviceConnector(logger);
         _debounce = new Timer(_ => Refresh(), null, Timeout.Infinite, Timeout.Infinite);
         _batteryTimer = new Timer(_ => _ = RefreshBatteriesAsync(), null, BatteryInterval, BatteryInterval);
