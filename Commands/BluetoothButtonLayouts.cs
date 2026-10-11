@@ -19,7 +19,6 @@ internal static class BluetoothButtonLayouts
     public const string Disconnect = "\U000F033A";     // mdi-link-variant-off
     public const string Trust = "\U000F0565";          // mdi-shield-check
     public const string Untrust = "\U000F099C";        // mdi-shield-off-outline
-    public const string Discovery = "\U000F0437";      // mdi-radar
     public const string Folder = "\U000F0FB0";         // mdi-devices
     public const string Connecting = "\U000F051F";     // mdi-timer-sand
     public const string Failed = "\U000F015A";         // mdi-close-circle-outline

@@ -24,9 +24,6 @@ verified on real hardware.
 - **Devices:** connect, disconnect, toggle, trust or untrust a paired device.
   - The button shows the device's name and its state.
   - It also shows a battery ring with the percentage, when BlueZ reports the level (`org.bluez.Battery1`).
-- **Discovery:** looks for devices nearby for a limited time (30 s by default), then stops on its
-  own. The button shows `Idle`, `Discovering` or `Unavailable`. The devices it finds appear in the
-  device folder, where they can be paired.
 - **Device slots:** ten favorite slots (`Bluetooth.Device01` … `Bluetooth.Device10`).
   - Each slot's button state follows its device: `Disconnected`, `Connecting`, `Connected`,
     `Disconnecting`, `Failed` and `Unavailable`. Each state can have its own design.
@@ -34,9 +31,10 @@ verified on real hardware.
 - **Device folder:** a touch folder that lists the paired devices, connected ones first.
   - Each tile shows the device's type icon, its state and its battery level.
   - A press on a device connects or disconnects it.
-  - The first tile runs a discovery with a countdown. While it runs, the devices it finds are listed
-    after the paired ones, with their signal strength. With *Show paired devices only* turned off,
-    they stay listed after the discovery ends.
+  - The first tile looks for devices nearby for a limited time (30 s by default) and shows a
+    countdown. While it runs, the devices it finds are listed after the paired ones, with their
+    signal strength. With *Show paired devices only* turned off, they stay listed after the
+    discovery ends.
   - A press on a found device pairs it (see below).
 
 Everything updates from BlueZ's D-Bus signals (`InterfacesAdded`, `InterfacesRemoved` and
@@ -57,7 +55,6 @@ The command menu goes from device to action:
 ```text
 Bluetooth
   Toggle Adapter
-  Discover Devices
   Devices
     WH-1000XM5 · Headset · Connected · 82 %
       WH-1000XM5 — Toggle

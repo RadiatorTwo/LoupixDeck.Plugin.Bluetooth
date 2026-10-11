@@ -20,7 +20,6 @@ internal static class BluetoothCommands
     public const string Group = "Bluetooth";
 
     public const string Adapter = Prefix + "Adapter";
-    public const string Discovery = Prefix + "Discovery";
     public const string Connect = Prefix + "Connect";
     public const string Disconnect = Prefix + "Disconnect";
     public const string Toggle = Prefix + "Toggle";

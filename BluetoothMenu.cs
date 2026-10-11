@@ -40,11 +40,6 @@ internal sealed class BluetoothMenu(BluetoothStateStore store, BluetoothSettings
             children.AddRange(SwitchLeaves(snapshot, BluetoothCommands.Adapter, "Toggle Adapter", "Adapter On", "Adapter Off"));
         }
 
-        if (capabilities.HasFlag(BluetoothCapabilities.Discovery))
-        {
-            children.AddRange(SwitchLeaves(snapshot, BluetoothCommands.Discovery, "Discover Devices", "Start Discovery", "Stop Discovery"));
-        }
-
         if (BuildDevices(snapshot, capabilities) is { } devices)
         {
             children.Add(devices);
