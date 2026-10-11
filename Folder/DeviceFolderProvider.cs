@@ -448,17 +448,57 @@ internal sealed class DeviceFolderProvider(BluetoothStateStore store, BluetoothS
 
         int boxWidth = Px(88);
         int left = (canvas.Width - boxWidth) / 2;
-        canvas.DrawText(title, left, Px(layout.TitleTop), boxWidth, Px(layout.TitleSize + 6), PluginColor.White, Font(layout.TitleSize), bold: true);
+        DrawLine(canvas, title, left, Px(layout.TitleTop), boxWidth, Px(layout.TitleSize + 6), PluginColor.White, Font(layout.TitleSize), Font(10), bold: true);
 
         if (subtitle is not null)
         {
-            canvas.DrawText(subtitle, left, Px(layout.LineTop), boxWidth, Px(layout.LineSize + 6), SubtitleColor, Font(layout.LineSize));
+            DrawLine(canvas, subtitle, left, Px(layout.LineTop), boxWidth, Px(layout.LineSize + 6), SubtitleColor, Font(layout.LineSize), Font(9), bold: false);
         }
 
         if (battery is { } level)
         {
-            canvas.DrawText(level.Text, left, Px(layout.BatteryTop), boxWidth, Px(20), level.Color, Font(15), bold: true);
+            DrawLine(canvas, level.Text, left, Px(layout.BatteryTop), boxWidth, Px(20), level.Color, Font(15), Font(15), bold: true);
         }
+    }
+
+    /// <summary>
+    /// Draws text on exactly one line. The canvas wraps text that is wider than its box, which
+    /// pushed a long name into the line below. A line that does not fit is drawn smaller, down to
+    /// <paramref name="minimumSize"/>, and only then shortened with an ellipsis.
+    /// </summary>
+    private static void DrawLine(
+        IRenderCanvas canvas,
+        string text,
+        int x,
+        int y,
+        int width,
+        int height,
+        PluginColor color,
+        float size,
+        float minimumSize,
+        bool bold)
+    {
+        // A small margin: the measured width and the wrapping decision do not match to the pixel.
+        float available = width * 0.94f;
+
+        while (size > minimumSize && canvas.MeasureText(text, size, bold) > available)
+        {
+            size = Math.Max(minimumSize, size - 0.5f);
+        }
+
+        if (canvas.MeasureText(text, size, bold) > available)
+        {
+            string shortened = text;
+
+            while (shortened.Length > 1 && canvas.MeasureText(shortened.TrimEnd() + "…", size, bold) > available)
+            {
+                shortened = shortened[..^1];
+            }
+
+            text = shortened.TrimEnd() + "…";
+        }
+
+        canvas.DrawText(text, x, y, width, height, color, size, bold: bold);
     }
 
     /// <summary>Positions and sizes of a tile, in pixels of a 90 px key.</summary>
