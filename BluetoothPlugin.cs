@@ -1,5 +1,6 @@
 using LoupixDeck.Plugin.Bluetooth.Backend;
 using LoupixDeck.Plugin.Bluetooth.Commands;
+using LoupixDeck.Plugin.Bluetooth.Folder;
 using LoupixDeck.Plugin.Bluetooth.State;
 using LoupixDeck.PluginSdk;
 
@@ -69,6 +70,11 @@ public sealed class BluetoothPlugin : LoupixPlugin, IMenuContributor, IPluginSet
             }
 
             _commands.AddRange(DeviceCommand.Create(store));
+
+            if (capabilities != BluetoothCapabilities.None)
+            {
+                _commands.Add(new OpenDeviceFolderCommand(store, settings, host));
+            }
 
             if (capabilities.HasFlag(BluetoothCapabilities.Connect))
             {
