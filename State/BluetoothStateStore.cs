@@ -161,7 +161,8 @@ internal sealed class BluetoothStateStore : IDisposable
                 outcome = await _backend.ConnectAsync(device.StableId, _settings.ConnectTimeout).ConfigureAwait(false);
             }
 
-            if (outcome == BluetoothCallOutcome.Ok && _settings.AutoTrust && Current.FindDevice(device.StableId) is { Trusted: false })
+            if (outcome == BluetoothCallOutcome.Ok && _settings.AutoTrust && Capabilities.HasFlag(BluetoothCapabilities.Trust) &&
+                Current.FindDevice(device.StableId) is { Trusted: false })
             {
                 BluetoothCallOutcome trusted = await _backend.SetTrustedAsync(device.StableId, true).ConfigureAwait(false);
 
@@ -362,10 +363,14 @@ internal sealed class BluetoothStateStore : IDisposable
             session.MarkConnecting();
 
             // Trusted lets the device reconnect on its own later, which is what a paired device is for.
-            BluetoothCallOutcome trusted = await _backend.SetTrustedAsync(device.StableId, true).ConfigureAwait(false);
-            if (trusted != BluetoothCallOutcome.Ok)
+            // Windows has no trust flag; a paired device may reconnect there anyway.
+            if (Capabilities.HasFlag(BluetoothCapabilities.Trust))
             {
-                _logger.Info($"Bluetooth: could not trust {device.DisplayName}: {BluetoothErrors.ToEnglishText(trusted)}.");
+                BluetoothCallOutcome trusted = await _backend.SetTrustedAsync(device.StableId, true).ConfigureAwait(false);
+                if (trusted != BluetoothCallOutcome.Ok)
+                {
+                    _logger.Info($"Bluetooth: could not trust {device.DisplayName}: {BluetoothErrors.ToEnglishText(trusted)}.");
+                }
             }
 
             BluetoothCallOutcome connected = await _backend.ConnectAsync(device.StableId, _settings.ConnectTimeout).ConfigureAwait(false);
