@@ -8,7 +8,7 @@ Connected · 82 %
 ```
 
 On Linux the plugin talks to BlueZ (`org.bluez`) over D-Bus directly. It never runs or parses
-`bluetoothctl`, and it only works with devices that are already paired.
+`bluetoothctl`. New devices can be paired from the device folder.
 
 The first version supports **Linux with BlueZ** and needs LoupixDeck with Plugin SDK 1.31 or newer.
 The plugin is built on a platform-neutral backend interface (`IBluetoothBackend`). On other
@@ -25,7 +25,8 @@ verified on real hardware.
   - The button shows the device's name and its state.
   - It also shows a battery ring with the percentage, when BlueZ reports the level (`org.bluez.Battery1`).
 - **Discovery:** looks for devices nearby for a limited time (30 s by default), then stops on its
-  own. The button shows `Idle`, `Discovering` or `Unavailable`.
+  own. The button shows `Idle`, `Discovering` or `Unavailable`. The devices it finds appear in the
+  device folder, where they can be paired.
 - **Device slots:** ten favorite slots (`Bluetooth.Device01` … `Bluetooth.Device10`).
   - Each slot's button state follows its device: `Disconnected`, `Connecting`, `Connected`,
     `Disconnecting`, `Failed` and `Unavailable`. Each state can have its own design.
@@ -33,9 +34,10 @@ verified on real hardware.
 - **Device folder:** a touch folder that lists the paired devices, connected ones first.
   - Each tile shows the device's type icon, its state and its battery level.
   - A press on a device connects or disconnects it.
-  - The first tile runs a discovery with a countdown.
-  - With *Show paired devices only* turned off, the folder also lists the devices the discovery
-    finds, with their signal strength.
+  - The first tile runs a discovery with a countdown. While it runs, the devices it finds are listed
+    after the paired ones, with their signal strength. With *Show paired devices only* turned off,
+    they stay listed after the discovery ends.
+  - A press on a found device pairs it (see below).
 
 Everything updates from BlueZ's D-Bus signals (`InterfacesAdded`, `InterfacesRemoved` and
 `PropertiesChanged`).
@@ -88,6 +90,30 @@ plugin while its own call runs, and are then reconciled with what BlueZ reports.
 - Optionally, the plugin retries a failed connection once.
 - Optionally, it marks a successfully connected device as trusted.
 
+## Pairing a new device
+
+1. Put the device into pairing mode.
+2. Open the device folder and press **Discover**.
+3. Press the device once it appears (*Press to pair*).
+
+The plugin pairs the device, marks it as trusted and connects it. While it does, the folder shows
+the pairing instead of the list:
+
+| The device | What the folder shows |
+|---|---|
+| Headphones, speakers, mice, gamepads | nothing to do; *Pairing*, then the result |
+| Phones, computers | the code; press **Confirm** if it matches the device, otherwise **Reject** |
+| Keyboards | the code; type it on the keyboard and press Enter |
+| Old devices with a fixed PIN | not supported (the deck cannot type); the pairing ends with a message |
+
+**Cancel** aborts a running pairing. After about 90 s it ends on its own. Found devices without a
+name are not listed; BlueZ reports many anonymous BLE advertisers.
+
+For the pairing, the plugin registers a BlueZ agent (`org.bluez.Agent1`, capability
+`DisplayYesNo`) for itself only. It never becomes the default agent, so the desktop's own
+Bluetooth dialogs keep working. The agent is removed as soon as the pairing ends, whatever the
+outcome.
+
 ## Using it with audio
 
 The plugin has no dependency on the Audio/PipeWire plugin. To switch the audio output when a
@@ -95,9 +121,8 @@ headset connects, put both steps in a macro: connect the device, then select the
 
 ## Not included
 
-- **Pairing new devices:** this needs a BlueZ agent with PIN, passkey and confirmation dialogs. A
-  temporary pairing assistant is planned for a later version.
-- Removing devices, and anything that needs root.
+- Entering a PIN on the deck, which only very old devices need.
+- Removing (unpairing) devices, and anything that needs root.
 
 ## Build
 
@@ -121,7 +146,7 @@ To copy the plugin by hand, copy these files from `bin/Release/` into
 |---|---|---|
 | Favorite devices | empty | The devices behind the device slots, in slot order. |
 | Hidden devices | empty | Devices kept out of the command menu and the device folder. |
-| Show paired devices only | on | Off: the folder also lists devices found by discovery. |
+| Show paired devices only | on | Off: found devices stay listed after the discovery ends. |
 | Preferred adapter | empty | The adapter used when a button names none. Empty uses the first adapter. |
 | Connection timeout (s) | 20 | How long connecting or disconnecting may take (5 to 120). |
 | Retry a failed connection once | off | Tries a failed or timed-out connection a second time. |
