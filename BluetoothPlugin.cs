@@ -60,6 +60,8 @@ public sealed class BluetoothPlugin : LoupixPlugin, IMenuContributor, IPluginSet
             if (capabilities.HasFlag(BluetoothCapabilities.AdapterPower))
             {
                 _commands.Add(new AdapterPowerCommand(store));
+                _commands.Add(new AdapterSwitchCommand(on: true, store));
+                _commands.Add(new AdapterSwitchCommand(on: false, store));
                 stateful.Add(new StatefulCommand(BluetoothCommands.Adapter, () => AdapterPowerCommand.StateFor(store)));
             }
 

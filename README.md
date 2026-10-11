@@ -18,9 +18,9 @@ verified on real hardware.
 
 ## What it does
 
-- **Adapter:** turn the adapter on, off, or toggle it. The button follows the adapter through the
-  states `Off`, `On` and `Unavailable`. When rfkill blocks the radio, the button shows
-  *Bluetooth is blocked*.
+- **Adapter:** **Toggle Adapter** flips the adapter and follows it through the states `Off`, `On`
+  and `Unavailable`. **Adapter On** and **Adapter Off** only switch it and are labelled with what
+  they do. When rfkill blocks the radio, the button shows *Bluetooth is blocked*.
 - **Devices:** connect, disconnect, toggle, trust or untrust a paired device.
   - The button shows the device's name and its state.
   - It also shows a battery ring with the percentage, when BlueZ reports the level (`org.bluez.Battery1`).

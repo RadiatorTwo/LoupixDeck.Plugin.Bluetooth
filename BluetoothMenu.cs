@@ -37,7 +37,7 @@ internal sealed class BluetoothMenu(BluetoothStateStore store, BluetoothSettings
 
         if (capabilities.HasFlag(BluetoothCapabilities.AdapterPower))
         {
-            children.AddRange(SwitchLeaves(snapshot, BluetoothCommands.Adapter, "Toggle Adapter", "Adapter On", "Adapter Off"));
+            children.AddRange(AdapterLeaves(snapshot));
         }
 
         if (BuildDevices(snapshot, capabilities) is { } devices)
@@ -58,11 +58,15 @@ internal sealed class BluetoothMenu(BluetoothStateStore store, BluetoothSettings
     /// Toggle, on and off for the preferred adapter; with several adapters, the same per adapter in
     /// a folder of its own.
     /// </summary>
-    private IEnumerable<MenuNode> SwitchLeaves(BluetoothSnapshot snapshot, string commandName, string toggle, string on, string off)
+    private IEnumerable<MenuNode> AdapterLeaves(BluetoothSnapshot snapshot)
     {
-        yield return SwitchLeaf(host.Tr(toggle), commandName, BluetoothCommands.ModeToggle, BluetoothCommands.Auto);
-        yield return SwitchLeaf(host.Tr(on), commandName, BluetoothCommands.ModeOn, BluetoothCommands.Auto);
-        yield return SwitchLeaf(host.Tr(off), commandName, BluetoothCommands.ModeOff, BluetoothCommands.Auto);
+        string toggle = host.Tr("Toggle Adapter");
+        string on = host.Tr("Adapter On");
+        string off = host.Tr("Adapter Off");
+
+        yield return ToggleLeaf(toggle, BluetoothCommands.Auto);
+        yield return AdapterLeaf(on, BluetoothCommands.AdapterOn, BluetoothCommands.Auto);
+        yield return AdapterLeaf(off, BluetoothCommands.AdapterOff, BluetoothCommands.Auto);
 
         if (snapshot.Adapters.Count < 2)
         {
@@ -72,11 +76,11 @@ internal sealed class BluetoothMenu(BluetoothStateStore store, BluetoothSettings
         foreach (BluetoothAdapterState adapter in snapshot.Adapters)
         {
             string name = adapter.DisplayName;
-            yield return Folder($"{host.Tr(toggle)} · {name}",
+            yield return Folder($"{toggle} · {name}",
             [
-                SwitchLeaf($"{name} — {host.Tr(toggle)}", commandName, BluetoothCommands.ModeToggle, adapter.Address),
-                SwitchLeaf($"{name} — {host.Tr(on)}", commandName, BluetoothCommands.ModeOn, adapter.Address),
-                SwitchLeaf($"{name} — {host.Tr(off)}", commandName, BluetoothCommands.ModeOff, adapter.Address)
+                ToggleLeaf($"{name} — {toggle}", adapter.Address),
+                AdapterLeaf($"{name} — {on}", BluetoothCommands.AdapterOn, adapter.Address),
+                AdapterLeaf($"{name} — {off}", BluetoothCommands.AdapterOff, adapter.Address)
             ], translate: false);
         }
     }
@@ -190,16 +194,23 @@ internal sealed class BluetoothMenu(BluetoothStateStore store, BluetoothSettings
         Children = children
     };
 
-    private static MenuNode SwitchLeaf(string name, string commandName, string mode, string adapter) => new()
+    private static MenuNode ToggleLeaf(string name, string adapter) => new()
     {
         Name = name,
-        CommandName = commandName,
+        CommandName = BluetoothCommands.Adapter,
         // The mode comes first: a host that applies only one value still gets the right action.
         Parameters = new Dictionary<string, string>
         {
-            [BluetoothCommands.ModeParameter] = mode,
+            [BluetoothCommands.ModeParameter] = BluetoothCommands.ModeToggle,
             [BluetoothCommands.AdapterParameter] = adapter
         }
+    };
+
+    private static MenuNode AdapterLeaf(string name, string commandName, string adapter) => new()
+    {
+        Name = name,
+        CommandName = commandName,
+        Parameters = new Dictionary<string, string> { [BluetoothCommands.AdapterParameter] = adapter }
     };
 
     private static MenuNode DeviceLeaf(string name, string commandName, string deviceId) => new()

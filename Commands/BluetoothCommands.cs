@@ -20,6 +20,8 @@ internal static class BluetoothCommands
     public const string Group = "Bluetooth";
 
     public const string Adapter = Prefix + "Adapter";
+    public const string AdapterOn = Prefix + "AdapterOn";
+    public const string AdapterOff = Prefix + "AdapterOff";
     public const string Connect = Prefix + "Connect";
     public const string Disconnect = Prefix + "Disconnect";
     public const string Toggle = Prefix + "Toggle";
@@ -40,6 +42,7 @@ internal static class BluetoothCommands
     public const string ModeParameter = "Mode";
     public const string AdapterParameter = "Adapter";
     public const string SwitchTemplate = "({Mode},{Adapter})";
+    public const string AdapterTemplate = "({Adapter})";
 
     /// <summary>
     /// The default of an optional parameter: the preferred adapter. It has to be a real value,

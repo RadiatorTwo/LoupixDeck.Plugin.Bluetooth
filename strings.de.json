@@ -151,5 +151,7 @@
   "Close": "Schließen",
   "Another pairing is running": "Es läuft bereits ein Kopplungsvorgang",
   "Entering a PIN is not supported": "Die Eingabe einer PIN wird nicht unterstützt",
-  "Off: devices found by a discovery stay listed in the device folder after the discovery ends.": "Aus: Bei einer Suche gefundene Geräte bleiben nach dem Ende der Suche im Geräteordner."
+  "Off: devices found by a discovery stay listed in the device folder after the discovery ends.": "Aus: Bei einer Suche gefundene Geräte bleiben nach dem Ende der Suche im Geräteordner.",
+  "Turn the Bluetooth adapter on.": "Den Bluetooth-Adapter einschalten.",
+  "Turn the Bluetooth adapter off.": "Den Bluetooth-Adapter ausschalten."
 }

@@ -151,5 +151,7 @@
   "Close": "Cerrar",
   "Another pairing is running": "Ya hay un emparejamiento en curso",
   "Entering a PIN is not supported": "No se admite introducir un PIN",
-  "Off: devices found by a discovery stay listed in the device folder after the discovery ends.": "Desactivado: los dispositivos encontrados en una búsqueda siguen en la carpeta de dispositivos al terminar."
+  "Off: devices found by a discovery stay listed in the device folder after the discovery ends.": "Desactivado: los dispositivos encontrados en una búsqueda siguen en la carpeta de dispositivos al terminar.",
+  "Turn the Bluetooth adapter on.": "Encender el adaptador Bluetooth.",
+  "Turn the Bluetooth adapter off.": "Apagar el adaptador Bluetooth."
 }
