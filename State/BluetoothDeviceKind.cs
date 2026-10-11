@@ -33,6 +33,62 @@ internal static class BluetoothDeviceKinds
         _ => BluetoothDeviceKind.Other
     };
 
+    /// <summary>Maps a classic Class of Device (major class bits 8-12, minor bits 2-7) onto a kind.</summary>
+    public static BluetoothDeviceKind FromClassOfDevice(uint classOfDevice)
+    {
+        uint major = (classOfDevice >> 8) & 0x1F;
+        uint minor = (classOfDevice >> 2) & 0x3F;
+
+        return major switch
+        {
+            1 => BluetoothDeviceKind.Computer,
+            2 => BluetoothDeviceKind.Phone,
+            4 => minor switch
+            {
+                1 or 2 or 6 => BluetoothDeviceKind.Headset,
+                5 or 7 or 8 or 10 => BluetoothDeviceKind.Speaker,
+                14 or 15 => BluetoothDeviceKind.Display,
+                _ => BluetoothDeviceKind.Other
+            },
+            // Peripheral: the low bits name a game controller, the high bits keyboard or pointer.
+            5 when (minor & 0x0F) is 1 or 2 => BluetoothDeviceKind.Gamepad,
+            5 => ((minor >> 4) & 0x3) switch
+            {
+                1 or 3 => BluetoothDeviceKind.Keyboard,
+                2 => BluetoothDeviceKind.Mouse,
+                _ => BluetoothDeviceKind.Other
+            },
+            7 when minor == 1 => BluetoothDeviceKind.Watch,
+            8 when minor == 4 => BluetoothDeviceKind.Gamepad,
+            _ => BluetoothDeviceKind.Other
+        };
+    }
+
+    /// <summary>Maps a Bluetooth LE appearance (category in bits 6-15) onto a kind.</summary>
+    public static BluetoothDeviceKind FromAppearance(ushort appearance)
+    {
+        int category = appearance >> 6;
+        int subcategory = appearance & 0x3F;
+
+        return category switch
+        {
+            1 => BluetoothDeviceKind.Phone,
+            2 => BluetoothDeviceKind.Computer,
+            3 => BluetoothDeviceKind.Watch,
+            5 => BluetoothDeviceKind.Display,
+            15 => subcategory switch
+            {
+                1 => BluetoothDeviceKind.Keyboard,
+                2 => BluetoothDeviceKind.Mouse,
+                3 or 4 => BluetoothDeviceKind.Gamepad,
+                _ => BluetoothDeviceKind.Other
+            },
+            33 => BluetoothDeviceKind.Speaker,
+            37 => BluetoothDeviceKind.Headset,
+            _ => BluetoothDeviceKind.Other
+        };
+    }
+
     /// <summary>The Material Design Icons name, for <c>IRenderCanvas.DrawSymbol</c>.</summary>
     public static string SymbolName(BluetoothDeviceKind kind) => kind switch
     {
