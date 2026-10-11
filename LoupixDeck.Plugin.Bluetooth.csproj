@@ -1,11 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <!-- The Windows TFM brings the WinRT projection (Windows.Devices.*) for the Windows backend.
+         The assembly still loads on Linux: the projection is plain managed code that only the
+         Windows backend touches. EnableWindowsTargeting lets the Linux release CI build it. -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>default</LangVersion>
     <DebugType>embedded</DebugType>
+    <!-- The Windows backend calls Core Audio and kernel streaming COM interfaces through raw vtables. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
     <!-- Produces a .deps.json and copies dependencies next to the plugin DLL
          so the host's AssemblyDependencyResolver can locate them. -->

@@ -10,11 +10,12 @@ Connected · 82 %
 On Linux the plugin talks to BlueZ (`org.bluez`) over D-Bus directly. It never runs or parses
 `bluetoothctl`. New devices can be paired from the device folder.
 
-The first version supports **Linux with BlueZ** and needs LoupixDeck with Plugin SDK 1.31 or newer.
-The plugin is built on a platform-neutral backend interface (`IBluetoothBackend`). On other
-platforms it loads, offers no commands, and reports on the Plugins page that the platform is not
-supported yet. A Windows backend may follow once its connect and disconnect paths have been
-verified on real hardware.
+On Windows it uses the WinRT Bluetooth API (see [Windows](#windows)).
+
+The plugin supports **Linux with BlueZ** and **Windows 10 version 2004 or newer**, and needs
+LoupixDeck with Plugin SDK 1.31 or newer. Both platforms sit behind one platform-neutral backend
+interface (`IBluetoothBackend`). On other platforms it loads, offers no commands, and reports on the
+Plugins page that the platform is not supported.
 
 ## What it does
 
@@ -111,6 +112,29 @@ For the pairing, the plugin registers a BlueZ agent (`org.bluez.Agent1`, capabil
 Bluetooth dialogs keep working. The agent is removed as soon as the pairing ends, whatever the
 outcome.
 
+## Windows
+
+The Windows backend watches the paired devices (classic and Bluetooth LE) with a WinRT device
+watcher and follows the radio's power state, so buttons update without polling.
+
+- **Adapter:** the toggle switches the Bluetooth radio, like the switch in the Windows settings.
+  With airplane mode or a hardware switch the radio is disabled, and the button shows
+  *Bluetooth is blocked*.
+- **Connect and disconnect:** Windows has no general API for this, so the plugin picks a path per
+  device:
+  - Audio devices (headsets, speakers) are connected and disconnected through the Bluetooth audio
+    driver (its one-shot reconnect and disconnect requests).
+  - Other classic devices (keyboards, mice, gamepads) have their Bluetooth services switched off and
+    on again, which makes Windows drop or open the connection. A device that reconnects on its own
+    may come back right after a disconnect.
+  - Bluetooth LE devices are connected by Windows itself; pressing connect shows *Not supported*.
+- **Trust:** Windows has no trust flag, so the trust commands and the *Trust connected devices*
+  setting are not offered.
+- **Battery:** shown when Windows reports the level, as in its Bluetooth settings.
+- **Discovery and pairing** work as on Linux. A code shown on both sides is confirmed on the deck.
+
+Device ids have the same `<adapter address>/<device address>` form as on Linux.
+
 ## Using it with audio
 
 The plugin has no dependency on the Audio/PipeWire plugin. To switch the audio output when a
@@ -129,11 +153,12 @@ loupix pack          # validates plugin.json and writes the store files to dist/
 loupix install       # copies the plugin into the LoupixDeck plugins folder
 ```
 
-To copy the plugin by hand, copy these files from `bin/Release/` into
-`~/.config/LoupixDeck/plugins/bluetooth/` and restart LoupixDeck:
+To copy the plugin by hand, copy these files from `bin/Release/` into the LoupixDeck plugins
+folder (`~/.config/LoupixDeck/plugins/bluetooth/` on Linux) and restart LoupixDeck:
 - `LoupixDeck.Plugin.Bluetooth.dll`
 - `LoupixDeck.Plugin.Bluetooth.deps.json`
 - `Tmds.DBus.Protocol.dll`
+- `Microsoft.Windows.SDK.NET.dll` and `WinRT.Runtime.dll` (the WinRT projection; only loaded on Windows)
 - `strings.*.json`
 - `plugin.json`
 
@@ -151,4 +176,5 @@ To copy the plugin by hand, copy these files from `bin/Release/` into
 | Discovery duration (s) | 30 | How long a discovery started from the deck runs (5 to 300). |
 
 **List devices** prints every adapter and paired device with the id the text fields accept.
-**Check BlueZ** shows whether BlueZ is reachable, the adapter state and the last error.
+**Check BlueZ** (on Windows **Check Bluetooth**) shows whether BlueZ or the Windows Bluetooth API is
+reachable, the adapter state and the last error.

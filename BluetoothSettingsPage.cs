@@ -16,7 +16,14 @@ namespace LoupixDeck.Plugin.Bluetooth;
 /// </summary>
 internal sealed class BluetoothSettingsPage(BluetoothStateStore store, IPluginHost host)
 {
+    /// <summary>The settings; the trust toggle only where the backend knows trust (not on Windows).</summary>
     public IReadOnlyList<PluginSettingDescriptor> BuildSchema() =>
+    [
+        .. AllSettings().Where(setting =>
+            setting.Key != BluetoothSettings.AutoTrustKey || store.Capabilities.HasFlag(BluetoothCapabilities.Trust))
+    ];
+
+    private static IReadOnlyList<PluginSettingDescriptor> AllSettings() =>
     [
         new PluginSettingDescriptor
         {
@@ -111,7 +118,7 @@ internal sealed class BluetoothSettingsPage(BluetoothStateStore store, IPluginHo
         },
         new PluginSettingAction
         {
-            Label = "Check BlueZ",
+            Label = OperatingSystem.IsLinux() ? "Check BlueZ" : "Check Bluetooth",
             Invoke = CheckAsync
         }
     ];
@@ -162,7 +169,7 @@ internal sealed class BluetoothSettingsPage(BluetoothStateStore store, IPluginHo
             : $"{adapter.DisplayName}: {host.Tr(adapter.Powered ? "On" : "Off")}";
 
         string text =
-            $"{host.Tr("BlueZ is reachable")} · {adapterText} · " +
+            $"{host.Tr(OperatingSystem.IsLinux() ? "BlueZ is reachable" : "Bluetooth is reachable")} · {adapterText} · " +
             $"{snapshot.Devices.Count(device => device.Paired)} {host.Tr("paired devices")} · " +
             $"{snapshot.Devices.Count(device => device.Connected)} {host.Tr("connected")}";
 

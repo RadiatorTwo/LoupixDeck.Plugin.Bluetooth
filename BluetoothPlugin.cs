@@ -7,12 +7,12 @@ using LoupixDeck.PluginSdk;
 namespace LoupixDeck.Plugin.Bluetooth;
 
 /// <summary>
-/// Shows and controls known Bluetooth devices. On Linux it talks to BlueZ over its D-Bus API; it
-/// never runs bluetoothctl and only works with devices that are already paired.
+/// Shows and controls known Bluetooth devices. On Linux it talks to BlueZ over its D-Bus API and
+/// never runs bluetoothctl; on Windows it uses the WinRT Bluetooth API.
 /// </summary>
 public sealed class BluetoothPlugin : LoupixPlugin, IMenuContributor, IPluginSettingsPage, IPluginRequirements
 {
-    /// <summary>How long the menu and the requirements wait for the first BlueZ snapshot.</summary>
+    /// <summary>How long the menu and the requirements wait for the first backend snapshot.</summary>
     private static readonly TimeSpan FirstSnapshotWait = TimeSpan.FromSeconds(3);
 
     private readonly List<IPluginCommand> _commands = [];
@@ -29,10 +29,10 @@ public sealed class BluetoothPlugin : LoupixPlugin, IMenuContributor, IPluginSet
     {
         Id = "bluetooth",
         Name = "Bluetooth",
-        Version = new Version(1, 0, 0),
+        Version = new Version(1, 1, 0),
         SdkVersion = SdkInfo.Version,
         Author = "RadiatorTwo",
-        Description = "Connects, disconnects and shows paired Bluetooth devices through BlueZ over D-Bus.",
+        Description = "Connects, disconnects and shows paired Bluetooth devices on Linux (BlueZ) and Windows.",
         Icon = LoadIcon()
     };
 
@@ -46,9 +46,7 @@ public sealed class BluetoothPlugin : LoupixPlugin, IMenuContributor, IPluginSet
             BluetoothSettings settings = new(host.Settings);
             _settings = settings;
 
-            IBluetoothBackend backend = OperatingSystem.IsLinux()
-                ? new BlueZBackend(host.Logger)
-                : new UnsupportedBluetoothBackend();
+            IBluetoothBackend backend = BluetoothBackends.Create(host.Logger);
             _backend = backend;
 
             BluetoothStateStore store = new(backend, settings, host.Logger);
@@ -64,7 +62,6 @@ public sealed class BluetoothPlugin : LoupixPlugin, IMenuContributor, IPluginSet
                 _commands.Add(new AdapterSwitchCommand(on: false, store));
                 stateful.Add(new StatefulCommand(BluetoothCommands.Adapter, () => AdapterPowerCommand.StateFor(store)));
             }
-
 
             _commands.AddRange(DeviceCommand.Create(store));
 
@@ -148,7 +145,7 @@ public sealed class BluetoothPlugin : LoupixPlugin, IMenuContributor, IPluginSet
 
     public IReadOnlyList<PluginRequirement> GetRequirements()
     {
-        if (!OperatingSystem.IsLinux())
+        if (!OperatingSystem.IsLinux() && !BluetoothBackends.IsWindowsSupported)
         {
             return
             [
@@ -157,7 +154,7 @@ public sealed class BluetoothPlugin : LoupixPlugin, IMenuContributor, IPluginSet
                     Id = "bluetooth.platform",
                     Name = "Supported platform",
                     IsMet = false,
-                    Message = "Bluetooth control is not supported on this platform yet. This version only supports Linux with BlueZ."
+                    Message = "Bluetooth control is not supported on this platform. It needs Linux with BlueZ or Windows 10 version 2004 or newer."
                 }
             ];
         }
@@ -167,6 +164,25 @@ public sealed class BluetoothPlugin : LoupixPlugin, IMenuContributor, IPluginSet
         _backend?.Ready.Wait(FirstSnapshotWait);
 
         bool available = _store?.Current.IsAvailable == true;
+
+        if (OperatingSystem.IsWindows())
+        {
+            return
+            [
+                new PluginRequirement
+                {
+                    Id = "bluetooth.windows",
+                    Name = "Bluetooth adapter",
+                    IsMet = available,
+                    Message = available
+                        ? "A Bluetooth adapter is available."
+                        : "No Bluetooth adapter was found.",
+                    InstallHint = available
+                        ? null
+                        : "Connect a Bluetooth adapter and check that its driver is installed in the Device Manager."
+                }
+            ];
+        }
 
         return
         [
